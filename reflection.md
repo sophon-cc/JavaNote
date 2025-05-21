@@ -43,7 +43,7 @@ hi~mimi
 ## 反射原理
 反射机制允许程序在执行期借助于 ReflectionAPI 取得任何类的内部信息(比如成员变量，构造器，成员方法等等)，并能操作对象的属性及方法。反射在设计模式和框架底层都会用到。
 
-![](./pictures/reflection.png)
+![](./pictures/reflection/reflection.png)
 
 加载完类之后，在堆中就产生了一个 Class 类型的对象（一个类只有一个 Class 对象），这个对象包含了类的完整结构信息。通过这个对象得到类的结构。这个 Class 对象就像一面镜子，透过这个镜子看到类的结构，所以，形象的称之为：反射。
 
@@ -171,7 +171,7 @@ public static void m3() throws ClassNotFoundException, NoSuchMethodException, In
 4 通过反射，且为动态加载。
 
 **类加载的三个阶段**
-![](./pictures/classload.png)
+![](./pictures/reflection/classload.png)
 **1 加载阶段**
 JVM 在该阶段的主要目的是将字节码从不同的数据源（可能是 class 文件、也可能是 jar 包，甚至网络）转化为二进制字节流加载到内存中，并生成一个代表该类的 java.lang.Class 对象。
 

@@ -3,7 +3,7 @@
 # IO流
 ## 文件
 文件就是保存数据的地方，常见的文件有 word、PPT、excel等。
-![](./pictures/stream.png)
+![](./pictures/IOstream/stream.png)
 文件在程序中是以流的形式来操作的，流是指数据从数据源（文件）和程序（内存）的路径。
 
 输入流：数据从数据源（文件）到程序（内存）的路径。
@@ -108,7 +108,7 @@ if(!file.exists()) {
 
 ## 节点流和处理流
 
-![](./pictures/nodeAndprocess.png)
+![](./pictures/IOstream/nodeAndprocess.png)
 
 **节点流和处理流的区别和联系**
 - 节点流是底层流/低级流,直接跟数据源相接.

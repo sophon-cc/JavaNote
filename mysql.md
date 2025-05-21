@@ -3,7 +3,7 @@
 # MYSQL
 ## 基本概念
 **学习重点**
-![](./pictures/mysqlcontext.png)
+![](./pictures/mysql/mysqlcontext.png)
 
 **MYSQL 数据模型**
 关系型数据库(RDBMS)概念：建立在关系模型基础上，由多张相互连接的二维表组成的数据库。特点：使用表存储数据，格式统一，便于维护；使用SQL语言操作，标准统一，使用方便。
@@ -124,7 +124,7 @@ DELETE FROM 表名 [WHERE 条件];
 ```
 ### DQL
 DQL 英文全称是 Data Query Language（数据查询语言），数据查询语言，用来查询数据库中表的记录。
-DQL 语法：
+**DQL 语法：**
 ```sql
 SELECT
 字段列表
@@ -141,6 +141,9 @@ ORDER BY
 LIMIT
 分页参数
 ```
+**DQL 执行顺序**
+![](./pictures/mysql/sqlExeOrder.png)
+
 #### 基本查询
 1. 查询多个字段
 ```sql
@@ -178,7 +181,23 @@ SELECT 字段列表 FROM 表名[WHERE 条件] GROUP BY 分组字段名 [HAVING �
 ```
 > 注意：
 执行顺序: where > 聚合函数 > having；
-分组之后，查询的字段一般为聚合函数和分组字段，查询其他字段无任何意义
+分组之后，查询的字段一般为聚合函数和分组字段，查询其他字段无任何意义。
 
 #### 排序查询(ORDER BY)
+1. 语法
+```sql
+SELECT 字段列表 FROM 表名 ORDER BY 字段1 排序方式1, 字段2 排序方式2;
+```
+2. 排序方式
+- ASC：升序（默认值）
+- DESC：降序
+
 #### 分页查询(LIMIT)
+语法
+```sql
+SELECT 字段列表 FROM 表名 LIMIT 起始索引, 查询记录数
+```
+> 注意： 
+起始索引从0开始，起始索引 = (查询页码 - 1) * 每页显示记录数；
+分页查询是数据库的方言，不同的数据库有不同的实现，MySQL 中是 LIMIT ；
+如果查询的是第一页数据，起始索引可以省略，直接简写为 limit 10。

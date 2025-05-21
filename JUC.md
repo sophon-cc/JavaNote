@@ -229,7 +229,7 @@ class Boiler implements Runnable {
 }
 ```
 ## 线程生命周期
-![](./pictures/threat_state.png)
+![](./pictures/JUC/threat_state.png)
 
 ## 线程同步
 在多线程编程中，一些敏感数据不允许被多个线程同时访问，此时就使用同步访问技术，确保在任何同一时刻，最多只有一个线程访问，以保证数据的完整性。
@@ -278,4 +278,3 @@ public class Counter {
     }
 }
 ```
-### 锁
