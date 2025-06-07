@@ -917,7 +917,7 @@ Mysql 数据库安装完成后，自带了四个数据库，具体作用如下:
 ![](./pictures/mysqlAdvance/sysDb.png)
 
 ### 常用工具
-**MySQL**
+**mysql**
 该 mysql 不是指 mysql 服务，而是指 mysql 的客户端工具。
 ```sh
 # 语法:
@@ -933,6 +933,16 @@ mysql [options] [database]
 ```sh
 # 示例:
 mysql -uroot -p123456 db01 -e "select * from stu";
+```
+
+**mysqladmin**
+mysqladmin 是一个执行管理操作的客户端程序。可以用它来检查服务器的配置和当前状态、创建并删除数据库等。
+```sh
+# 通过帮助文档查看选项
+mysqladmin --help
+# 示例:
+mysqladmin -uroot -p123456 drop 'test01';
+mysqladmin -uroot -p123456 version;
 ```
 
 **mysqlbinlog**
@@ -983,4 +993,18 @@ mysqldump [options] --all-databases/-A
 -t, --no-create-info     # 不包含数据表的创建语句
 -d, --no-data            # 不包含数据
 -T, --tab=name           # 自动生成两个文件：一个 .sql 文件，创建表结构的语句;一个 .txt 文件，数据文件
+```
+
+**mysqlimport/source**
+mysqlimport 是客户端数据导入工具，用来导入 mysqldump 加 -T 参数后导出的文本文件。
+```sh
+# 语法:
+mysqlimport [options] db_name textfile1 [textfile2 ...]
+# 示例:
+mysqlimport -uroot -p2143 db_name /tmp/city.txt
+```
+如果需要导入 sql 文件,可以使用 mysql 中的 source 指令：
+```sql
+# 语法:
+source /root/xxxxx.sql;
 ```
