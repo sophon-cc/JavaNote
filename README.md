@@ -9,3 +9,4 @@
 | 5. mysql.md           | B 站黑马程序员 MySQL数据库入门到精通 2022 年 |
 | 6. mysqlAdvance.md    | B 站黑马程序员 MySQL数据库入门到精通 2022 年 |
 | 7. Servlet.md         | B 站千锋教育 Servlet 视频教程：Servlet从入门到精通 2020 年 |
+| 6. spring6.md         | B 站尚硅谷Spring零基础入门到进阶 2023 年 |

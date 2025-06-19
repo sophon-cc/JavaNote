@@ -499,13 +499,3 @@ Servlet API 中提供了一个 Filter 接口，开发人员编写一个 Java 类
 如果 web.xml，按照 filter-mapping 注册顺序，从上往下。
 web.xml配置高于注解方式。
 如果注解和 web.xml 同时配置，会创建多个过滤器对象，造成过滤多次。
-
-
-
-
-
-
-
-
-
-
