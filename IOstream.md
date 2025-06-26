@@ -61,6 +61,12 @@ System.out.println("文件的父目录：" + file.getParent());
 System.out.println("文件是否存在：" + file.exists());
 System.out.println("文件是否为一般文件：" + file.isFile());
 System.out.println("文件是否为目录：" + file.isDirectory());
+
+// 判断是否为文件夹
+if(file.isDirectory()) {
+    // 获取文件夹里面的所有内容（包括文件和文件夹）
+    File[] childFiles = file.listFiles();
+}
 ```
 
 ### 目录的创建与删除
