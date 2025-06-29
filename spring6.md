@@ -1745,18 +1745,663 @@ public void test() {
 > </dependency>
 > ```
 
+## Resources
+Java 的标准 java.net.URL 类和各种 URL 前缀的标准处理程序无法满足所有对 low-level 资源的访问，比如：没有标准化的 URL 实现可用于访问需要从类路径或相对于 ServletContext 获取的资源。并且缺少某些 Spring 所需要的功能，例如检测某资源是否存在等。而 Spring 的 Resource 声明了**访问 low-level 资源**的能力。
 
+### Resource 接口
+Spring 的 Resource 接口位于 org.springframework.core.io 中。旨在成为一个更强大的接口，用于抽象对低级资源的访问。以下显示了 Resource 接口定义的方法：
+```java
+public interface Resource extends InputStreamSource {
 
+    boolean exists();
 
+    boolean isReadable();
 
+    boolean isOpen();
 
+    boolean isFile();
 
+    URL getURL() throws IOException;
 
+    URI getURI() throws IOException;
 
+    File getFile() throws IOException;
 
+    ReadableByteChannel readableChannel() throws IOException;
 
+    long contentLength() throws IOException;
 
+    long lastModified() throws IOException;
 
+    Resource createRelative(String relativePath) throws IOException;
 
+    String getFilename();
 
+    String getDescription();
+}
+```
+Resource 接口继承了 InputStreamSource 接口，提供了很多 InputStreamSource 所没有的方法。InputStreamSource 接口，只有一个方法：
+```java
+public interface InputStreamSource {
 
+    InputStream getInputStream() throws IOException;
+
+}
+```
+其中一些重要的方法：
+getInputStream(): 找到并打开资源，返回一个 InputStream 以从资源中读取。预计每次调用都会返回一个**新的** InputStream()，调用者有责任关闭每个流
+exists(): 返回一个布尔值，表明某个资源是否以物理形式存在
+isOpen: 返回一个布尔值，指示此资源是否具有开放流的句柄。如果为 true，InputStream就不能够多次读取，只能够读取一次并且及时关闭以避免内存泄漏。对于所有常规资源实现，返回 false，但是 InputStreamResource 除外。
+getDescription(): 返回资源的描述，用来输出错误的日志。这通常是完全限定的文件名或资源的实际 URL 。
+
+其他方法：
+isReadable(): 表明资源的目录读取是否通过 getInputStream() 进行读取。
+isFile(): 表明这个资源是否代表了一个文件系统的文件。
+getURL(): 返回一个URL句柄，如果资源不能够被解析为 URL，将抛出 IOException
+getURI(): 返回一个资源的 URI 句柄
+getFile(): 返回某个文件，如果资源不能够被解析称为绝对路径，将会抛出 FileNotFoundException
+lastModified(): 资源最后一次修改的时间戳
+createRelative(): 创建此资源的相关资源
+getFilename(): 资源的文件名是什么 例如：最后一部分的文件名 myfile.txt
+
+### Resources 实现类
+Resource 接口是 Spring 资源访问策略的抽象，它本身并不提供任何资源访问实现，具体的资源访问由该接口的实现类完成——每个实现类代表一种资源访问策略。Resource 一般包括这些实现类：UrlResource、ClassPathResource、FileSystemResource、ServletContextResource、InputStreamResource、ByteArrayResource。
+
+#### UrlResource 访问网络资源
+Resource的一个实现类，用来访问网络资源，它支持URL的绝对路径。
+- http:------该前缀用于访问基于HTTP协议的网络资源。
+- ftp:------该前缀用于访问基于FTP协议的网络资源
+- file: ------该前缀用于从文件系统中读取资源
+
+```java
+/*
+    //1 访问网络资源
+	//loadAndReadUrlResource("http://www.atguigu.com");
+    
+    //2 访问文件系统资源（项目根路径下，而非模块）
+    loadAndReadUrlResource("file:1.txt");
+*/
+public static void loadAndReadUrlResource(String path) throws IOException {
+    // 创建一个 Resource 对象
+    UrlResource url  = new UrlResource(path);
+    // 获取资源名
+    System.out.println(url.getFilename());
+    System.out.println(url.getURI());
+    // 获取资源描述
+    System.out.println(url.getDescription());
+    //获取资源内容
+    int read = -1;
+    byte[] bytes = new byte[1024];
+    while ((read = inputStream.read(bytes)) != -1) {
+        System.out.println(new String(bytes, 0, read));
+    }
+}
+```
+
+#### ClassPathResource
+ClassPathResource 用来访问类加载路径下的资源，相对于其他的 Resource 实现类，其主要优势是方便访问类加载路径里的资源，尤其对于 Web 应用，ClassPathResource 可自动搜索位于 classes 下的资源文件，无须使用绝对路径访问。
+```java
+public static void loadAndReadUrlResource(String path) throws Exception{
+    // 创建一个 Resource 对象
+    ClassPathResource resource = new ClassPathResource(path);
+    // 获取文件名
+    System.out.println(resource.getFilename());
+    // 获取文件描述
+    System.out.println(resource.getDescription());
+    //获取文件内容
+    InputStream in = resource.getInputStream();
+    int read = -1;
+    byte[] bytes = new byte[1024];
+    while ((read = in.read(bytes)) != -1) {
+        System.out.println(new String(bytes, 0, read));
+    }
+}
+```
+ClassPathResource 实例可使用 ClassPathResource 构造器显式地创建，但更多的时候它都是隐式地创建的。当执行 Spring 的某个方法时，该方法接受一个代表资源路径的字符串参数，当 Spring 识别该字符串参数中包含 `classpath:` 前缀后，系统会自动创建ClassPathResource 对象。
+
+#### FileSystemResource
+Spring 提供的 FileSystemResource 类用于访问文件系统资源，使用 FileSystemResource 来访问文件系统资源并没有太大的优势，因为 Java 提供的 File 类也可用于访问文件系统资源。
+
+FileSystemResource 实例可使用 FileSystemResource 构造器显示地创建，但更多的时候它都是隐式创建。执行 Spring 的某个方法时，该方法接受一个代表资源路径的字符串参数，当 Spring 识别该字符串参数中包含 `file:` 前缀后，系统将会自动创建 FileSystemResource 对象。
+
+#### ServletContextResource
+这是 ServletContext 资源的 Resource 实现，它解释相关 Web 应用程序根目录中的相对路径。它始终支持流(stream)访问和 URL 访问，但只有在扩展 Web 应用程序存档且资源实际位于文件系统上时才允许 java.io.File 访问。无论它是在文件系统上扩展还是直接从 JAR 或其他地方（如数据库）访问，实际上都依赖于 Servlet 容器。
+
+#### InputStreamResource
+InputStreamResource 是给定的输入流(InputStream)的 Resource 实现。它的使用场景在没有特定的资源实现的时候使用(感觉和 @Component 的适用场景很相似)。与其他 Resource 实现相比，这是已打开资源的描述符。 因此，它的isOpen()方法返回true。如果需要将资源描述符保留在某处或者需要多次读取流，请不要使用它。
+
+#### ByteArrayResource
+字节数组的 Resource 实现类。通过给定的数组创建了一个 ByteArrayInputStream。它对于从任何给定的字节数组加载内容非常有用，而无需求助于单次使用的 InputStreamResource 。
+
+### ResourceLoader 接口
+Spring 提供如下两个标志性接口：
+1. ResourceLoader ： 该接口实现类的实例可以获得一个Resource实例。
+2. ResourceLoaderAware ： 该接口实现类的实例将获得一个ResourceLoader的引用。
+
+在 ResourceLoader 接口里有如下方法：
+Resource getResource（String location） ： 该接口仅有这个方法，用于返回一个Resource 实例。ApplicationContext 实现类都实现 ResourceLoader 接口，因此 ApplicationContext 可直接获取 Resource 实例。
+
+Spring 将采用和 ApplicationContext 相同的策略来访问资源。也就是说，如果 ApplicationContext 是 FileSystemXmlApplicationContext，res 就是FileSystemResource 实例；如果 ApplicationContext 是ClassPathXmlApplicationContext，res 就是 ClassPathResource 实例
+
+当 Spring 应用需要进行资源访问时，实际上并不需要直接使用 Resource 实现类，而是调用 ResourceLoader 实例的 getResource() 方法来获得资源，ReosurceLoader 将会负责选择 Reosurce 实现类，也就是确定具体的资源访问策略，从而将应用程序和具体的资源访问策略分离开来
+
+另外，使用 ApplicationContext 访问资源时，可通过不同前缀指定强制使用指定的 ClassPathResource、FileSystemResource 等实现类
+```java
+Resource res = ctx.getResource("calsspath:bean.xml");
+Resrouce res = ctx.getResource("file:bean.xml");
+Resource res = ctx.getResource("http://localhost:8080/beans.xml");
+```
+### ResourceLoaderAware 接口
+ResourceLoaderAware 接口实现类的实例将获得一个 ResourceLoader 的引用， ResourceLoaderAware 接口也提供了一个 setResourceLoader() 方法，该方法将由 Spring 容器负责调用，Spring 容器会将一个 ResourceLoader 对象作为该方法的参数传入。
+
+如果把实现 ResourceLoaderAware 接口的 Bean 类部署在 Spring 容器中，Spring 容器会将自身当成 ResourceLoader 作为 setResourceLoader() 方法的参数传入。由于 ApplicationContext 的实现类都实现了 ResourceLoader 接口，Spring 容器自身完全可作为 ResorceLoader 使用。
+> 通俗解释：ResourceLoaderAware 是 Spring 提供的一个 **感知接口（Aware Interface）**，用于让 Bean 获取 Spring 容器中的 ResourceLoader。它的核心作用是 **让 Bean 能够动态加载类路径、文件系统或网络资源**。
+
+创建类，实现 ResourceLoaderAware 接口：
+```java
+package com.spring6.resouceloader;
+import org.springframework.context.ResourceLoaderAware;
+import org.springframework.core.io.ResourceLoader;
+
+@Component
+public class TestBean implements ResourceLoaderAware {
+    private ResourceLoader resourceLoader;
+
+    // 实现 ResourceLoaderAware 接口必须实现的方法
+	// 如果把该 Bean 部署在 Spring 容器中，该方法将会有Spring容器负责调用。
+	// Spring容器调用该方法时，Spring 会将自身作为参数传给该方法。
+    public void setResourceLoader(ResourceLoader resourceLoader) {
+        this.resourceLoader = resourceLoader;
+    }
+
+    //返回ResourceLoader对象的应用
+    public ResourceLoader getResourceLoader(){
+        return this.resourceLoader;
+    }
+}
+```
+
+### 应用程序上下文和资源路径
+不管以怎样的方式创建 ApplicationContext 实例，都需要为 ApplicationContext 指定配置文件，Spring 允许使用一份或多分 XML 配置文件。当程序创建 ApplicationContext 实例时，通常也是以 Resource 的方式来访问配置文件的，所以 ApplicationContext 完全支持 ClassPathResource、FileSystemResource、ServletContextResource 等资源访问方式。
+
+ApplicationContext确定资源访问策略通常有两种方法：
+1. 使用ApplicationContext实现类指定访问策略。
+2. 使用前缀指定访问策略。
+
+**ApplicationContext 实现类指定访问策略**
+创建 ApplicationContext 对象时，通常可以使用如下实现类：
+1. ClassPathXMLApplicationContext : 对应使用 ClassPathResource 进行资源访问。
+2. FileSystemXmlApplicationContext ： 对应使用 FileSystemResource 进行资源访问。
+3. XmlWebApplicationContext ： 对应使用 ServletContextResource 进行资源访问。
+
+当使用ApplicationContext的不同实现类时，就意味着 Spring 使用响应的资源访问策略。
+
+**使用前缀指定访问策略**
+```java
+package com.spring6.context;
+
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.support.FileSystemXmlApplicationContext;
+import org.springframework.core.io.Resource;
+
+public class Demo1 {
+
+    public static void main(String[] args) {
+        /*
+         * 通过搜索文件系统路径下的xml文件创建ApplicationContext，
+         * 但通过指定classpath:前缀强制搜索类加载路径
+         * classpath:bean.xml
+         * */
+        ApplicationContext ctx =
+                new ClassPathXmlApplicationContext("classpath:bean.xml");
+        System.out.println(ctx);
+        Resource resource = ctx.getResource("atguigu.txt");
+        System.out.println(resource.getFilename());
+        System.out.println(resource.getDescription());
+    }
+}
+```
+
+classpath * :前缀提供了加载多个XML配置文件的能力，当使用 `classpath*:` 前缀来指定 XML 配置文件时，系统将搜索类加载路径，找到所有与文件名匹配的文件，分别加载文件中的配置定义，最后合并成一个 ApplicationContext。
+```java
+ApplicationContext ctx = new ClassPathXmlApplicationContext("classpath*:bean.xml");
+System.out.println(ctx);
+```
+当使 `classpath*:` 前缀时，Spring将会搜索类加载路径下所有满足该规则的配置文件。
+
+如果不是采用 `classpath*:` 前缀，而是改为使用 `classpath:` 前缀，Spring则只加载第一个符合条件的XML文件
+
+一次性加载多个配置文件的方式：指定配置文件时使用通配符:
+```java
+ApplicationContext ctx = new ClassPathXmlApplicationContext("classpath:bean*.xml");
+```
+
+## 国际化：i18n
+### i18n概述
+国际化也称作 i18n ，其来源是英文单词 internationalization 的首末字符 i 和 n，18 为中间的字符数。由于软件发行可能面向多个国家，对于不同国家的用户，软件显示不同语言的过程就是国际化。通常来讲，软件中的国际化是通过配置文件来实现的，假设要支撑两种语言，那么就需要两个版本的配置文件。
+
+### Java 国际化
+**Java 国际化**
+Java 自身是支持国际化的，java.util.Locale 用于指定当前用户所属的语言环境等信息，java.util.ResourceBundle 用于查找绑定对应的资源文件。Locale 包含了 language 信息和 country 信息，Locale 创建默认 locale 对象时使用的静态方法：
+```java
+    /**
+     * This method must be called only for creating the Locale.*
+     * constants due to making shortcuts.
+     */
+    private static Locale createConstant(String lang, String country) {
+        BaseLocale base = BaseLocale.createInstance(lang, country);
+        return getInstance(base, null);
+    }
+```
+
+**配置文件命名规则**
+basename_language_country.properties
+必须遵循以上的命名规则，java 才会识别。其中，basename 是必须的，语言和国家是可选的。这里存在一个优先级概念，如果同时提供了 messages.properties 和 messages_zh_CN.propertes 两个配置文件，如果提供的 locale 符合 en_CN，那么优先查找 messages_en_CN.propertes 配置文件，如果没查找到，再查找 messages.properties 配置文件。最后，提示下，所有的配置文件必须放在 classpath 中，一般放在 resources 目录下
+
+**Java 国际化**
+在 resource 目录下创建两个配置文件：messages_zh_CN.propertes 和 messages_en_GB.propertes 。并测试：
+```java
+package com.spring6.javai18n;
+import java.nio.charset.StandardCharsets;
+import java.util.Locale;
+import java.util.ResourceBundle;
+
+public class Demo1 {
+    public static void main(String[] args) {
+        System.out.println(ResourceBundle.getBundle("messages",
+                new Locale("en","GB")).getString("test"));
+
+        System.out.println(ResourceBundle.getBundle("messages",
+                new Locale("zh","CN")).getString("test"));
+    }
+}
+```
+**Spring 国际化**
+MessageSource 接口spring中国际化是通过 MessageSource 这个接口来支持的。常见实现类：
+- ResourceBundleMessageSource
+这个是基于Java的ResourceBundle基础类实现，允许仅通过资源名加载国际化资源
+
+- ReloadableResourceBundleMessageSource
+这个功能和第一个类的功能类似，多了定时刷新功能，允许在不重启系统的情况下，更新资源的信息
+
+- StaticMessageSource
+它允许通过编程的方式提供国际化信息，一会我们可以通过这个来实现db中存储国际化信息的功能。
+
+演示：
+1. 创建 messages_zh_CN.properties：
+```properties
+test=欢迎 {0}, 时间 {1} 
+```
+
+2. 创建spring配置文件，配置 MessageSource：
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+    <bean id="messageSource"
+          class="org.springframework.context.support.ResourceBundleMessageSource">
+        <property name="basenames">
+            <list>
+                <value>messages</value>
+            </list>
+        </property>
+        <property name="defaultEncoding">
+            <value>utf-8</value>
+        </property>
+    </bean>
+</beans>
+```
+3. 测试
+```java
+package com.spring6.javai18n;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.context.support.ClassPathXmlApplicationContext;
+import java.util.Date;
+import java.util.Locale;
+
+public class Demo2 {
+
+    public static void main(String[] args) {
+        ApplicationContext context = new ClassPathXmlApplicationContext("beans.xml");
+        //传递动态参数，使用数组形式对应{0} {1}顺序
+        Object[] objs = new Object[]{"zhangsan", new Date().toString()};
+
+        //test 为资源文件的key值,
+        //objs 为资源文件 value 值所需要的参数, Local.CHINA为国际化为语言
+        String str=context.getMessage("test", objs, Locale.CHINA);
+        System.out.println(str);
+    }
+}
+```
+
+## 数据校验：Validation
+在开发中，我们经常遇到参数校验的需求，比如用户注册的时候，要校验用户名不能为空、用户名长度不超过 20 个字符、手机号是合法的手机号格式等等。如果使用普通方式，我们会把校验的代码和真正的业务处理逻辑耦合在一起，而且如果未来要新增一种校验逻辑也需要在修改多个地方。而 spring validation 允许通过注解的方式来定义对象校验规则，把校验和业务逻辑分离开，让代码编写更加方便。Spring Validation 其实就是对 Hibernate Validator 进一步的封装，方便在 Spring 中使用。
+
+在Spring中有多种校验的方式:
+- 第一种是通过实现 org.springframework.validation.Validator 接口，然后在代码中调用这个类。
+- 第二种是按照 Bean Validation 方式来进行校验，即通过注解的方式。
+- 第三种是基于方法实现校验。
+- 除此之外，还可以实现自定义校验。
+
+> 引入依赖
+> ```xml
+> <dependencies>
+>     <dependency>
+>         <groupId>org.hibernate.validator</groupId>
+>         <artifactId>hibernate-validator</artifactId>
+>         <version>7.0.5.Final</version>
+>     </dependency>
+> 
+>     <dependency>
+>         <groupId>org.glassfish</groupId>
+>         <artifactId>jakarta.el</artifactId>
+>         <version>4.0.1</version>
+>     </dependency>
+> </dependencies>
+> ```
+
+### 通过 Validator 接口实现
+创建类实现Validator接口，实现接口方法指定校验规则：
+```java
+import org.springframework.validation.Errors;
+import org.springframework.validation.ValidationUtils;
+import org.springframework.validation.Validator;
+
+public class PersonValidator implements Validator {
+    // supports 方法用来表示此校验用在哪个类型上
+    @Override
+    public boolean supports(Class<?> clazz) {
+        return Person.class.equals(clazz);
+    }
+    // validate 是设置校验逻辑的地点，其中 ValidationUtils，是 Spring 封装的校验工具类，帮助快速实现校验。
+    @Override
+    public void validate(Object object, Errors errors) {
+        ValidationUtils.rejectIfEmpty(errors, "name", "name.empty");
+        Person p = (Person) object;
+        if (p.getAge() < 0) {
+            errors.rejectValue("age", "error value < 0");
+        } else if (p.getAge() > 110) {
+            errors.rejectValue("age", "error value too old");
+        }
+    }
+}
+```
+测试：
+```java
+@Test
+public void test() {
+    //创建person对象
+    Person person = new Person();
+    person.setName("lucy");
+    person.setAge(-1);
+    
+    // 创建Person对应的DataBinder
+    DataBinder binder = new DataBinder(person);
+
+    // 设置校验
+    binder.setValidator(new PersonValidator());
+
+    // 由于Person对象中的属性为空，所以校验不通过
+    binder.validate();
+
+    //输出结果
+    BindingResult results = binder.getBindingResult();
+    System.out.println(results.getAllErrors());
+}
+```
+### Bean Validation 注解实现
+1. 创建配置类，配置 LocalValidatorFactoryBean ：
+```java
+@Configuration
+@ComponentScan("com.spring6.validation.method2")
+public class ValidationConfig {
+    @Bean
+    public LocalValidatorFactoryBean validator() {
+        return new LocalValidatorFactoryBean();
+    }
+}
+```
+
+2.创建实体类，使用注解定义校验规则：
+```java
+public class User {
+    @NotNull
+    private String name;
+
+    @Min(0)
+    @Max(120)
+    private int age;
+
+    public String getName() {
+        return name;
+    }
+    public void setName(String name) {
+        this.name = name;
+    }
+    public int getAge() {
+        return age;
+    }
+    public void setAge(int age) {
+        this.age = age;
+    }
+}
+```
+> 常用注解说明
+@NotNull 限制必须不为 null
+@NotEmpty 只作用于字符串类型，字符串不为空，并且长度不为 0
+@NotBlank 只作用于字符串类型，字符串不为空，并且 trim() 后不为空串
+@DecimalMax(value) 限制必须为一个不大于指定值的数字
+@DecimalMin(value) 限制必须为一个不小于指定值的数字
+@Max(value) 限制必须为一个不大于指定值的数字
+@Min(value) 限制必须为一个不小于指定值的数字
+@Pattern(value) 限制必须符合指定的正则表达式
+@Size(max, min) 限制字符长度必须在 min 到 max 之间
+@Email 验证注解的元素值是 Email，也可以通过正则表达式和 flag 指定自定义的 email 格式
+
+3.使用两种不同的校验器实现
+（1）使用 jakarta.validation.Validator 校验
+```java
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validator;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import java.util.Set;
+
+@Service
+public class MyService1 {
+    @Autowired
+    private Validator validator;
+
+    public  boolean validator(User user){
+        Set<ConstraintViolation<User>> sets =  validator.validate(user);
+        return sets.isEmpty();
+    }
+}
+```
+（2）使用 org.springframework.validation.Validator 校验
+```java
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.validation.BindException;
+import org.springframework.validation.Validator;
+
+@Service
+public class MyService2 {
+    @Autowired
+    private Validator validator;
+
+    public boolean validaPersonByValidator(User user) {
+        BindException bindException = new BindException(user, user.getName());
+        validator.validate(user, bindException);
+        return bindException.hasErrors();
+    }
+}
+```
+测试：
+```java
+public class TestClass {
+    @Test
+    public void test1() {
+        ApplicationContext context = new AnnotationConfigApplicationContext(ValidationConfig.class);
+        MyService1 myService = context.getBean(MyService1.class);
+        User user = new User();
+        user.setAge(-1);
+        boolean validator = myService.validator(user);
+        System.out.println(validator);
+    }
+
+    @Test
+    public void test2() {
+        ApplicationContext context = new AnnotationConfigApplicationContext(ValidationConfig.class);
+        MyService2 myService = context.getBean(MyService2.class);
+        User user = new User();
+        user.setName("lucy");
+        user.setAge(130);
+        user.setAge(-1);
+        boolean validator = myService.validaPersonByValidator(user);
+        System.out.println(validator);
+    }
+}
+```
+### *基于方法实现校验
+1.创建配置类，配置 MethodValidationPostProcessor ：
+```java
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
+import org.springframework.validation.beanvalidation.MethodValidationPostProcessor;
+
+@Configuration
+@ComponentScan("com.spring6.validation.method3")
+public class ValidationConfig {
+    @Bean
+    public MethodValidationPostProcessor validationPostProcessor() {
+        return new MethodValidationPostProcessor();
+    }
+}
+```
+
+2.创建实体类，使用注解设置校验规则：
+```java
+public class User {
+    @NotNull
+    private String name;
+
+    @Min(0)
+    @Max(120)
+    private int age;
+
+    @Pattern(regexp = "^1(3|4|5|7|8)\\d{9}$",message = "手机号码格式错误")
+    @NotBlank(message = "手机号码不能为空")
+    private String phone;
+
+    public String getName() {
+        return name;
+    }
+    public void setName(String name) {
+        this.name = name;
+    }
+    public int getAge() {
+        return age;
+    }
+    public void setAge(int age) {
+        this.age = age;
+    }
+    public String getPhone() {
+        return phone;
+    }
+    public void setPhone(String phone) {
+        this.phone = phone;
+    }
+}
+```
+
+3.定义 Service 类，通过注解操作对象：
+```java
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
+import org.springframework.stereotype.Service;
+import org.springframework.validation.annotation.Validated;
+
+@Service
+@Validated
+public class MyService {
+    public String testParams(@NotNull @Valid User user) {
+        return user.toString();
+    }
+}
+```
+4.测试：
+```java
+@Test
+public void testMyService1() {
+    ApplicationContext context = new AnnotationConfigApplicationContext(ValidationConfig.class);
+    MyService myService = context.getBean(MyService.class);
+    User user = new User();
+    user.setAge(-1);
+    myService.testParams(user);
+}
+```
+
+#### 实现自定义校验
+1. 自定义校验注解：
+```java
+import jakarta.validation.Constraint;
+import jakarta.validation.Payload;
+import java.lang.annotation.*;
+
+@Target({ElementType.METHOD, ElementType.FIELD, ElementType.ANNOTATION_TYPE, ElementType.CONSTRUCTOR, ElementType.PARAMETER})
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+@Constraint(validatedBy = {CannotBlankValidator.class})
+public @interface CannotBlank {
+    //默认错误消息
+    String message() default "不能包含空格";
+
+    //分组
+    Class<?>[] groups() default {};
+
+    //负载
+    Class<? extends Payload>[] payload() default {};
+
+    //指定多个时使用
+    @Target({ElementType.METHOD, ElementType.FIELD, ElementType.ANNOTATION_TYPE, ElementType.CONSTRUCTOR, ElementType.PARAMETER, ElementType.TYPE_USE})
+    @Retention(RetentionPolicy.RUNTIME)
+    @Documented
+    @interface List {
+        CannotBlank[] value();
+    }
+}
+```
+
+2.编写真正的校验类：
+```java
+import jakarta.validation.ConstraintValidator;
+import jakarta.validation.ConstraintValidatorContext;
+
+public class CannotBlankValidator implements ConstraintValidator<CannotBlank, String> {
+    @Override
+    public void initialize(CannotBlank constraintAnnotation) {
+    }
+
+    @Override
+    public boolean isValid(String value, ConstraintValidatorContext context) {
+            //null时不进行校验
+            if (value != null && value.contains(" ")) {
+                    //获取默认提示信息
+                    String defaultConstraintMessageTemplate = context.getDefaultConstraintMessageTemplate();
+                    System.out.println("default message :" + defaultConstraintMessageTemplate);
+                    //禁用默认提示信息
+                    context.disableDefaultConstraintViolation();
+                    //设置提示语
+                    context.buildConstraintViolationWithTemplate("can not contains blank").addConstraintViolation();
+                    return false;
+            }
+            return true;
+    }
+}
+```
