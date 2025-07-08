@@ -345,7 +345,9 @@ jdbc.driver=com.mysql.cj.jdbc.Driver
 | 取值         | 含义      | 创建对象的时机         |
 |--------------|-----------|-----------------|
 | singleton（默认） | 在IOC容器中，这个bean的对象始终为单实例 | IOC容器初始化时     |
-| prototype    | 这个bean在IOC容器中有多个实例       | 获取bean时         |
+| prototype    | 这个bean在IOC容器中有多个实例       | 获取bean时         |、
+
+
 如果是在WebApplicationContext环境下还会有另外几个作用域（但不常用）：
 | 取值    | 含义          |
 |---------|---------------------|
@@ -642,16 +644,13 @@ public @interface Di {
 package com.spring.bean;
 
 public interface ApplicationContext {
-
     Object getBean(Class clazz);
-
 }
 ```
 
 实现 AnnotationApplicationContext 基于注解扫描 bean。
 ```java
 public class AnnotationApplicationContext implements ApplicationContext {
-
     private String rootPath;
     // 创建 Map 集合存放 bean 对象
     private Map<Class, Object> beanFactory = new HashMap<>();
@@ -671,9 +670,8 @@ public class AnnotationApplicationContext implements ApplicationContext {
             Enumeration<URL> urls = Thread.currentThread().getContextClassLoader().getResources(packagePath);
             while (urls.hasMoreElements()) {
                 URL url = urls.nextElement();
-                String filePath = URLDecoder.decode(url.getFile(), StandardCharsets.UTF_8);
-                System.out.println(filePath);
                 // 解码 %5c
+                String filePath = URLDecoder.decode(url.getFile(), StandardCharsets.UTF_8);
                 rootPath = filePath.substring(0, filePath.length() - packagePath.length());
                 // 扫描包，加载 bean
                 try {
@@ -754,7 +752,6 @@ public class AnnotationApplicationContext implements ApplicationContext {
             }
         }
     }
-
 }
 ```
 
