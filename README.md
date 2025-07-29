@@ -11,4 +11,5 @@
 | 7. Servlet.md         | B 站千锋教育 Servlet 视频教程：Servlet 从入门到精通 2020 年 |
 | 8. spring6.md         | B 站尚硅谷 Spring 零基础入门到进阶 2023 年 |
 | 9. ~~ThymeLeaf.md~~         | B 站动力节点 Thymeleaf 视频教程-细说 Thymeleaf 服务器模板引擎（了解前 7 集即可，没有笔记） |
-| 10.          | B 站 |
+| 10. springMVC.md         | B 站尚硅谷SpringMVC教程丨一套快速上手spring mvc |
+| 10. myBatis.md         | B 站【尚硅谷】MyBatis零基础入门教程（细致全面，快速上手mybatis） |

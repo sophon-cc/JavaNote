@@ -1380,7 +1380,7 @@ public void test(){
     //修改功能
     //String sql = "update t_emp set name=? where id=?";
     //int result = jdbcTemplate.update(sql, "张三丰", 1);
-
+ 
     //删除功能
     //String sql = "delete from t_emp where id=?";
     //int result = jdbcTemplate.update(sql, 1);

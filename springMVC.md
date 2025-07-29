@@ -92,8 +92,6 @@ Spring版本：5.3.1
 
 注：由于 Maven 的传递性，我们不必将所有需要的包全部配置依赖，而是配置最顶端的依赖，其他靠传递性导入。
 
-![images](img\img001.png)
-
 ## 3、配置web.xml
 
 注册SpringMVC的前端控制器DispatcherServlet
@@ -502,7 +500,7 @@ public String testParam(String username, String password){
 > 2.若使用字符串数组类型的形参，此参数的数组中包含了每一个数据；
 > 3.若使用字符串类型的形参，此参数的值为每个数据中间使用逗号拼接的结果。
 
-### 3、@RequestParam
+### 3、@RequestParam（重点）
 
 @RequestParam是将请求参数和控制器方法的形参创建映射关系
 
@@ -540,7 +538,7 @@ public String testServletAPI3(String username, String password, @RequestParam("h
 
 @CookieValue注解一共有三个属性：value、required、defaultValue，用法同@RequestParam
 
-### 6、通过POJO获取请求参数
+### 6、通过POJO获取请求参数（重点）
 
 可以在控制器方法的形参位置设置一个实体类类型的形参，此时若浏览器传输的请求参数的参数名和实体类中的属性名一致，那么请求参数就会为此属性赋值
 
@@ -588,13 +586,13 @@ public String testPOJO(User user){
 </filter-mapping>
 ```
 
-> 注：
+> 注：方法 2-5 底层均使用 ModelAndView 实现。
 >
 > SpringMVC中处理编码的过滤器一定要配置到其他过滤器之前，否则无效
 
 # 五、域对象共享数据
 
-### 1、使用ServletAPI向request域对象共享数据
+### 1、使用ServletAPI向request域对象共享数据（了解）
 
 ```java
 @RequestMapping("/testServletAPI")
@@ -674,6 +672,11 @@ public String testSession(HttpSession session){
 }
 ```
 
+> html 页面获取 session 域中的数据：
+> ```html
+> <p th:text="${session.msg}"></p>
+> ```
+
 ### 8、向application域共享数据
 
 ```java
@@ -684,6 +687,12 @@ public String testApplication(HttpSession session){
     return "success";
 }
 ```
+
+> html 页面获取 application 域中的数据：
+> ```html
+> <p th:text="${application.msg}"></p>
+> ```
+
 
 # 六、SpringMVC的视图
 
@@ -706,8 +715,6 @@ public String testHello(){
 }
 ```
 
-![](img/img002.png)
-
 ### 2、转发视图
 
 SpringMVC中默认的转发视图是InternalResourceView
@@ -718,14 +725,12 @@ SpringMVC中创建转发视图的情况：
 
 例如"forward:/"，"forward:/employee"
 
-```java
+```
 @RequestMapping("/testForward")
 public String testForward(){
     return "forward:/testHello";
 }
 ```
-
-![image-20210706201316593](img/img003.png)
 
 ### 3、重定向视图
 
@@ -742,10 +747,7 @@ public String testRedirect(){
 }
 ```
 
-![image-20210706201602267](img/img004.png)
-
 > 注：
->
 > 重定向视图在解析时，会先将redirect:前缀去掉，然后会判断剩余部分是否以/开头，若是则会自动拼接上下文路径
 
 ### 4、视图控制器view-controller
@@ -761,9 +763,7 @@ public String testRedirect(){
 ```
 
 > 注：
->
 > 当SpringMVC中设置任何一个view-controller时，其他控制器中的请求映射将全部失效，此时需要在SpringMVC的核心配置文件中设置开启mvc注解驱动的标签：
->
 > <mvc:annotation-driven />
 
 # 七、RESTful
@@ -913,54 +913,57 @@ b>当前请求必须传输请求参数_method
   }
   ```
 
-- 准备dao模拟数据
+- 准备dao数据库数据
 
   ```java
-  package com.atguigu.mvc.dao;
-  
-  import java.util.Collection;
-  import java.util.HashMap;
-  import java.util.Map;
-  
-  import com.atguigu.mvc.bean.Employee;
+  package com.mvc.dao.impl;
+  import com.mvc.dao.EmpDao;
+  import com.mvc.pojo.Employee;
+  import org.springframework.beans.factory.annotation.Autowired;
+  import org.springframework.jdbc.core.BeanPropertyRowMapper;
+  import org.springframework.jdbc.core.JdbcTemplate;
   import org.springframework.stereotype.Repository;
   
+  import java.util.List;
   
   @Repository
-  public class EmployeeDao {
+  public class EmpDaoImpl implements EmpDao {
   
-     private static Map<Integer, Employee> employees = null;
-     
-     static{
-        employees = new HashMap<Integer, Employee>();
+      @Autowired
+      private JdbcTemplate jdbcTemplate;
   
-        employees.put(1001, new Employee(1001, "E-AA", "aa@163.com", 1));
-        employees.put(1002, new Employee(1002, "E-BB", "bb@163.com", 1));
-        employees.put(1003, new Employee(1003, "E-CC", "cc@163.com", 0));
-        employees.put(1004, new Employee(1004, "E-DD", "dd@163.com", 0));
-        employees.put(1005, new Employee(1005, "E-EE", "ee@163.com", 1));
-     }
-     
-     private static Integer initId = 1006;
-     
-     public void save(Employee employee){
-        if(employee.getId() == null){
-           employee.setId(initId++);
-        }
-        employees.put(employee.getId(), employee);
-     }
-     
-     public Collection<Employee> getAll(){
-        return employees.values();
-     }
-     
-     public Employee get(Integer id){
-        return employees.get(id);
-     }
-     
-     public void delete(Integer id){
-        employees.remove(id);
-     }
+      @Override
+      public void saveEmp(Employee e) {
+          String sql1 = "insert into employee values(null, ?, ?, ?)";
+          String sql2 = "update employee set last_name = ?, email = ?, gender = ? where id = ?";
+          if(e.getId() == null || getEmpById(e.getId()) == null) {
+              jdbcTemplate.update(sql1, e.getLastName(), e.getEmail(), e.getGender());
+          } else {
+              jdbcTemplate.update(sql2, e.getLastName(), e.getEmail(), e.getGender(), e.getId());
+          }
+      }
+  
+      @Override
+      public Employee getEmpById(int id) {
+          String sql = "select * from employee where id = ?";
+          Employee employee = null;
+          employee = jdbcTemplate.queryForObject(sql, new BeanPropertyRowMapper<>(Employee.class), id);
+          return employee;
+      }
+  
+      @Override
+      public List<Employee> getAllEmp() {
+          String sql = "select * from employee";
+          List<Employee> employees = null;
+          employees = jdbcTemplate.query(sql, new BeanPropertyRowMapper<>(Employee.class));
+          return employees;
+      }
+  
+      @Override
+      public void deleteEmpById(int id) {
+          String sql = "delete from employee where id = ?";
+          jdbcTemplate.update(sql, id);
+      }
   }
   ```
 
@@ -978,13 +981,14 @@ b>当前请求必须传输请求参数_method
 
 ### 3、具体功能：访问首页
 
-##### a>配置view-controller
+#### a>配置view-controller
 
 ```xml
 <mvc:view-controller path="/" view-name="index"/>
 ```
+```
 
-##### b>创建页面
+#### b>创建页面
 
 ```html
 <!DOCTYPE html>
@@ -1005,10 +1009,11 @@ b>当前请求必须传输请求参数_method
 ##### a>控制器方法
 
 ```java
+@Transactional(readOnly = true)
 @RequestMapping(value = "/employee", method = RequestMethod.GET)
-public String getEmployeeList(Model model){
-    Collection<Employee> employeeList = employeeDao.getAll();
-    model.addAttribute("employeeList", employeeList);
+public String getAllEmps(Model model) {
+    List<Employee> allEmp = empDao.getAllEmp();
+    model.addAttribute("employees", allEmp);
     return "employee_list";
 }
 ```
@@ -1036,7 +1041,7 @@ public String getEmployeeList(Model model){
             <th>gender</th>
             <th>options(<a th:href="@{/toAdd}">add</a>)</th>
         </tr>
-        <tr th:each="employee : ${employeeList}">
+        <tr th:each="employee : ${employees}">
             <td th:text="${employee.id}"></td>
             <td th:text="${employee.lastName}"></td>
             <td th:text="${employee.email}"></td>
@@ -1104,8 +1109,8 @@ public String getEmployeeList(Model model){
 
 ```java
 @RequestMapping(value = "/employee/{id}", method = RequestMethod.DELETE)
-public String deleteEmployee(@PathVariable("id") Integer id){
-    employeeDao.delete(id);
+public String deleteEmp(@PathVariable("id") int id) {
+    empDao.deleteEmpById(id);
     return "redirect:/employee";
 }
 ```
@@ -1147,8 +1152,8 @@ public String deleteEmployee(@PathVariable("id") Integer id){
 
 ```java
 @RequestMapping(value = "/employee", method = RequestMethod.POST)
-public String addEmployee(Employee employee){
-    employeeDao.save(employee);
+public String addEmp(Employee employeee) {
+    empDao.saveEmp(employeee);
     return "redirect:/employee";
 }
 ```
@@ -1164,11 +1169,10 @@ public String addEmployee(Employee employee){
 ##### b>控制器方法
 
 ```java
-@RequestMapping(value = "/employee/{id}", method = RequestMethod.GET)
-public String getEmployeeById(@PathVariable("id") Integer id, Model model){
-    Employee employee = employeeDao.get(id);
-    model.addAttribute("employee", employee);
-    return "employee_update";
+@RequestMapping(value = "/employee", method = RequestMethod.PUT)
+public String updateEmp(Employee employeee) {
+    empDao.saveEmp(employeee);
+    return "redirect:/employee";
 }
 ```
 
@@ -1200,6 +1204,8 @@ public String getEmployeeById(@PathVariable("id") Integer id, Model model){
 </body>
 </html>
 ```
+
+> th:field="${employee.gender}"可用于单选框或复选框的回显,若单选框的value和employee.gender的值一致，则添加checked="checked"属性。
 
 ### 9、具体功能：执行更新
 
@@ -1401,6 +1407,11 @@ public ResponseEntity<byte[]> testResponseEntity(HttpSession session) throws IOE
 }
 ```
 
+> 实现文件下载必须要有：
+> ```java
+> httpHeaders.add("Content-Disposition", "attachment;filename=pic.jpg");
+> ```
+
 ### 2、文件上传
 
 文件上传要求form表单的请求方式必须为post，并且添加属性enctype="multipart/form-data"
@@ -1462,9 +1473,10 @@ SpringMVC中的拦截器需要实现HandlerInterceptor
 SpringMVC的拦截器必须在SpringMVC的配置文件中进行配置：
 
 ```xml
+<!-- 方式一 -->
 <bean class="com.atguigu.interceptor.FirstInterceptor"></bean>
 <ref bean="firstInterceptor"></ref>
-<!-- 以上两种配置方式都是对DispatcherServlet所处理的所有的请求进行拦截 -->
+<!-- 方式二 -->
 <mvc:interceptor>
     <mvc:mapping path="/**"/>
     <mvc:exclude-mapping path="/testRequestEntity"/>
