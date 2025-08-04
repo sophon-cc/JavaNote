@@ -215,7 +215,7 @@ maven自动解决依赖冲突问题能力，会按照自己的原则，进行重
     在 `<depencies> </depencies>` 中，先声明的，路径相同，会优先选择。
 
 小思考:
-```XML
+```text
 前提：
    A 1.1 -> B 1.1 -> C 1.1 
    F 2.2 -> B 2.2 
@@ -270,13 +270,17 @@ pom声明：
 |mvn install|打包后上传到maven本地仓库(本地部署)|
 |mvn deploy|只打包，上传到maven私服仓库(私服部署)|
 
+> 注意事项
+> 1.命令执行必须进入项目的根目录，与 pom.xml 平级；
+> 2.部署必须是 jar 包的形式。
+
 **可视化方式构建:**
 
 ![](./pictures/Maven/visualBuild.png)
 
 **构建命令周期:**
 
-构建生命周期可以理解成是一组固定构建命令的有序集合，触发周期后的命令，会自动触发周期前的命令！也是一种简化构建的思路!
+构建生命周期可以理解成是一组固定构建命令的有序集合，触发周期后的命令，会**自动触发周期前的命令**，也是一种简化构建的思路。
 
 - 清理周期：主要是对项目编译生成文件进行清理
     包含命令：clean
@@ -296,17 +300,13 @@ pom声明：
 
 **周期，命令和插件:**
 
-周期→包含若干命令→包含若干插件!
-
-使用周期命令构建，简化构建过程！
-
+周期 -> 包含若干命令 -> 包含若干插件，使用周期命令构建，简化构建过程。
 最终进行构建的是插件！
-
 插件配置:
 
 ```XML
 <build>
-   <!-- jdk17 和 war包版本插件不匹配 -->
+    <!-- jdk17 和 war包版本插件不匹配 -->
     <plugins>
         <plugin>
             <groupId>org.apache.maven.plugins</groupId>
@@ -318,12 +318,152 @@ pom声明：
 ```
 
 # 四、Maven 继承和聚合特性
+### 4.1 Maven工程继承关系
+1. 继承概念
+
+    Maven 继承是指在 Maven 的项目中，让一个项目从另一个项目中继承配置信息的机制。继承可以让我们在多个项目中共享同一配置信息，简化项目的管理和维护工作。
+    ![](./pictures/Maven/inherit.png)
+2. 继承作用
+
+    作用：在父工程中统一管理项目中的依赖信息,进行统一版本管理!
+
+    它的背景是：
+
+    - 对一个比较大型的项目进行了模块拆分。
+    - 一个 project 下面，创建了很多个 module。
+    - 每一个 module 都需要配置自己的依赖信息。
+
+    它背后的需求是：
+
+    - 多个模块要使用同一个框架，它们应该是同一个版本，所以整个项目中使用的框架版本需要统一管理。
+    - 使用框架时所需要的 jar 包组合（或者说依赖信息组合）需要经过长期摸索和反复调试，最终确定一个可用组合。这个耗费很大精力总结出来的方案不应该在新的项目中重新摸索。
+
+    通过在父工程中为整个项目维护依赖信息的组合既保证了整个项目使用规范、准确的 jar 包；又能够将以往的经验沉淀下来，节约时间和精力。
+3. 继承语法
+    - 父工程
+    ```XML
+    <groupId>com.atguigu.maven</groupId>
+    <artifactId>pro03-maven-parent</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <!-- 当前工程作为父工程，它要去管理子工程，所以打包方式必须是 pom -->
+    <packaging>pom</packaging>
+    ```
+
+    - 子工程
+    ```XML
+    <!-- 使用parent标签指定当前工程的父工程 -->
+    <parent>
+        <!-- 父工程的坐标 -->
+        <groupId>com.atguigu.maven</groupId>
+        <artifactId>pro03-maven-parent</artifactId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+
+    <!-- 子工程的坐标 -->
+    <!-- 如果子工程坐标中的groupId和version与父工程一致，那么可以省略 -->
+    <!-- <groupId>com.atguigu.maven</groupId> -->
+    <artifactId>pro04-maven-module</artifactId>
+    <!-- <version>1.0-SNAPSHOT</version> -->
+    ```
+4. 父工程依赖统一管理
+    - 父工程声明版本
+    ```XML
+    <!-- 使用dependencyManagement标签配置对依赖的管理 -->
+    <!-- 被管理的依赖并没有真正被引入到工程 -->
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework</groupId>
+                <artifactId>spring-core</artifactId>
+                <version>4.0.0.RELEASE</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework</groupId>
+                <artifactId>spring-beans</artifactId>
+                <version>4.0.0.RELEASE</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework</groupId>
+                <artifactId>spring-context</artifactId>
+                <version>4.0.0.RELEASE</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework</groupId>
+                <artifactId>spring-expression</artifactId>
+                <version>4.0.0.RELEASE</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework</groupId>
+                <artifactId>spring-aop</artifactId>
+                <version>4.0.0.RELEASE</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+    ```
+    - 子工程引用版本
+    ```XML
+    <!-- 子工程引用父工程中的依赖信息时，可以把版本号去掉。  -->
+    <!-- 把版本号去掉就表示子工程中这个依赖的版本由父工程决定。 -->
+    <!-- 具体来说是由父工程的dependencyManagement来决定。 -->
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-beans</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-context</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-expression</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-aop</artifactId>
+        </dependency>
+    </dependencies>
+    ```
+
+### 4.2 Maven工程聚合关系
+1. 聚合概念
+    Maven 聚合是指将多个项目组织到一个父级项目中，通过触发父工程的构建,统一按顺序触发子工程构建的过程
+2. 聚合作用
+    1. 统一管理子项目构建：通过聚合，可以将多个子项目组织在一起，方便管理和维护。
+    2. 优化构建顺序：通过聚合，可以对多个项目进行顺序控制，避免出现构建依赖混乱导致构建失败的情况。
+3. 聚合语法
+    父项目中包含的子项目列表。
+
+```XML
+<project>
+    <groupId>com.example</groupId>
+    <artifactId>parent-project</artifactId>
+    <packaging>pom</packaging>
+    <version>1.0.0</version>
+    <modules>
+        <module>child-project1</module>
+        <module>child-project2</module>
+    </modules>
+</project>
+```
+  4. 聚合演示
+    通过触发父工程构建命令、引发所有子模块构建！产生反应堆！
+    ![](./pictures/Maven/aggregation.png)
 
 
-# 五、Maven 实战案例
+# 五、Maven 核心掌握总结
 
-
-# 六、Maven 核心掌握总结
-
+|||
+|-|-|
+|核心点|掌握目标|
+|安装|maven安装、环境变量、maven配置文件修改|
+|工程创建|gavp属性理解、JavaSE/EE工程创建、项目结构|
+|依赖管理|依赖添加、依赖传递、版本提取、导入依赖错误解决|
+|构建管理|构建过程、构建场景、构建周期等|
+|继承和聚合|理解继承和聚合作用、继承语法和实践、聚合语法和实践|
 
 
