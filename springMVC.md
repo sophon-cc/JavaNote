@@ -291,13 +291,13 @@ public String HelloWorld() {
 
 # 三、@RequestMapping注解
 
-### 1、@RequestMapping注解的功能
+## 1、@RequestMapping注解的功能
 
 从注解名称上我们可以看到，@RequestMapping注解的作用就是将请求和处理请求的控制器方法关联起来，建立映射关系。
 
 SpringMVC 接收到指定的请求，就会来找到在映射关系中对应的控制器方法来处理这个请求。
 
-### 2、@RequestMapping注解的位置
+## 2、@RequestMapping注解的位置
 
 @RequestMapping标识一个类：设置映射请求的请求路径的初始信息
 
@@ -317,7 +317,7 @@ public class RequestMappingController {
 }
 ```
 
-### 3、@RequestMapping注解的value属性
+## 3、@RequestMapping注解的value属性
 
 @RequestMapping注解的value属性通过请求的请求地址匹配请求映射
 
@@ -339,7 +339,7 @@ public String testRequestMapping(){
 }
 ```
 
-### 4、@RequestMapping注解的method属性
+## 4、@RequestMapping注解的method属性
 
 @RequestMapping注解的method属性通过请求的请求方式（get或post）匹配请求映射
 
@@ -382,7 +382,7 @@ public String testRequestMapping(){
 >
 > 若要发送put和delete请求，则需要通过spring提供的过滤器HiddenHttpMethodFilter，在RESTful部分会讲到
 
-### 5、@RequestMapping注解的params属性（了解）
+## 5、@RequestMapping注解的params属性（了解）
 
 @RequestMapping注解的params属性通过请求的请求参数匹配请求映射
 
@@ -415,7 +415,7 @@ public String testRequestMapping(){
 >
 > 若当前请求满足@RequestMapping注解的value和method属性，但是不满足params属性，此时页面回报错400：Parameter conditions "username, password!=123456" not met for actual request parameters: username={admin}, password={123456}
 
-### 6、@RequestMapping注解的headers属性（了解）
+## 6、@RequestMapping注解的headers属性（了解）
 
 @RequestMapping注解的headers属性通过请求的请求头信息匹配请求映射
 
@@ -431,18 +431,17 @@ public String testRequestMapping(){
 
 若当前请求满足@RequestMapping注解的value和method属性，但是不满足headers属性，此时页面显示404错误，即资源未找到
 
-### 7、SpringMVC支持ant风格的路径
+## 7、SpringMVC支持ant风格的路径
 
 ？：表示任意的单个字符（有且必须有一个，不能0个）
-
 *：表示任意的0个或多个字符
+\\**：表示任意的0层或多层目录
 
-\**：表示任意的0层或多层目录
+> 注意：
+> 1.在使用\**时，只能使用/xx/**的方式（`**` 只能在末尾）；
+> 2.特殊符号不可以 ? / \ [ ] % ;
 
-> 注意：1.在使用\**时，只能使用/**/xxx的方式；
-2.特殊符号不可以 ? / \ [ ] % ;
-
-### 8、SpringMVC支持路径中的占位符（重点）
+## 8、SpringMVC支持路径中的占位符（重点）
 
 原始方式：/deleteUser?id=1
 
@@ -465,7 +464,7 @@ public String testRest(@PathVariable("id") String id, @PathVariable("username") 
 
 # 四、SpringMVC获取请求参数
 
-### 1、通过ServletAPI获取（了解）
+## 1、通过ServletAPI获取（了解）
 
 将HttpServletRequest作为控制器方法的形参，此时HttpServletRequest类型的参数表示封装了当前请求的请求报文的对象
 
@@ -479,7 +478,7 @@ public String testParam(HttpServletRequest request){
 }
 ```
 
-### 2、通过控制器方法的形参获取请求参数
+## 2、通过控制器方法的形参获取请求参数
 
 在控制器方法的形参位置，设置和请求参数同名的形参，当浏览器发送请求，匹配到请求映射时，在DispatcherServlet中就会将请求参数赋值给相应的形参
 
@@ -500,7 +499,7 @@ public String testParam(String username, String password){
 > 2.若使用字符串数组类型的形参，此参数的数组中包含了每一个数据；
 > 3.若使用字符串类型的形参，此参数的值为每个数据中间使用逗号拼接的结果。
 
-### 3、@RequestParam（重点）
+## 3、@RequestParam（重点）
 
 @RequestParam是将请求参数和控制器方法的形参创建映射关系
 
@@ -526,19 +525,19 @@ public String testServletAPI3(String username, String password, @RequestParam("h
 }
 ```
 
-### 4、@RequestHeader
+## 4、@RequestHeader
 
 @RequestHeader是将请求头信息和控制器方法的形参创建映射关系
 
 @RequestHeader注解一共有三个属性：value、required、defaultValue，用法同@RequestParam
 
-### 5、@CookieValue
+## 5、@CookieValue
 
 @CookieValue是将cookie数据和控制器方法的形参创建映射关系
 
 @CookieValue注解一共有三个属性：value、required、defaultValue，用法同@RequestParam
 
-### 6、通过POJO获取请求参数（重点）
+## 6、通过POJO获取请求参数（重点）
 
 可以在控制器方法的形参位置设置一个实体类类型的形参，此时若浏览器传输的请求参数的参数名和实体类中的属性名一致，那么请求参数就会为此属性赋值
 
@@ -562,7 +561,7 @@ public String testPOJO(User user){
 //最终结果-->User{id=null, username='张三', password='123', age=23, sex='男', email='123@qq.com'}
 ```
 
-### 7、解决获取请求参数的乱码问题
+## 7、解决获取请求参数的乱码问题
 
 解决获取请求参数的乱码问题，可以使用SpringMVC提供的编码过滤器CharacterEncodingFilter，但是必须在web.xml中进行注册
 
@@ -592,7 +591,7 @@ public String testPOJO(User user){
 
 # 五、域对象共享数据
 
-### 1、使用ServletAPI向request域对象共享数据（了解）
+## 1、使用ServletAPI向request域对象共享数据（了解）
 
 ```java
 @RequestMapping("/testServletAPI")
@@ -602,7 +601,7 @@ public String testServletAPI(HttpServletRequest request){
 }
 ```
 
-### 2、使用ModelAndView向request域对象共享数据
+## 2、使用ModelAndView向request域对象共享数据
 
 ```java
 @RequestMapping("/testModelAndView")
@@ -621,7 +620,7 @@ public ModelAndView testModelAndView(){
 }
 ```
 
-### 3、使用Model向request域对象共享数据
+## 3、使用Model向request域对象共享数据
 
 ```java
 @RequestMapping("/testModel")
@@ -631,7 +630,7 @@ public String testModel(Model model){
 }
 ```
 
-### 4、使用map向request域对象共享数据
+## 4、使用map向request域对象共享数据
 
 ```java
 @RequestMapping("/testMap")
@@ -641,7 +640,7 @@ public String testMap(Map<String, Object> map){
 }
 ```
 
-### 5、使用ModelMap向request域对象共享数据
+## 5、使用ModelMap向request域对象共享数据
 
 ```java
 @RequestMapping("/testModelMap")
@@ -651,7 +650,7 @@ public String testModelMap(ModelMap modelMap){
 }
 ```
 
-### 6、Model、ModelMap、Map的关系
+## 6、Model、ModelMap、Map的关系
 
 Model、ModelMap、Map类型的参数其实本质上都是 BindingAwareModelMap 类型的
 
@@ -662,7 +661,7 @@ public class ExtendedModelMap extends ModelMap implements Model {}
 public class BindingAwareModelMap extends ExtendedModelMap {}
 ```
 
-### 7、向session域共享数据
+## 7、向session域共享数据
 
 ```java
 @RequestMapping("/testSession")
@@ -677,7 +676,7 @@ public String testSession(HttpSession session){
 > <p th:text="${session.msg}"></p>
 > ```
 
-### 8、向application域共享数据
+## 8、向application域共享数据
 
 ```java
 @RequestMapping("/testApplication")
@@ -704,7 +703,7 @@ SpringMVC视图的种类很多，默认有转发视图和重定向视图
 
 若使用的视图技术为Thymeleaf，在SpringMVC的配置文件中配置了Thymeleaf的视图解析器，由此视图解析器解析之后所得到的是ThymeleafView
 
-### 1、ThymeleafView
+## 1、ThymeleafView
 
 当控制器方法中所设置的视图名称没有任何前缀时，此时的视图名称会被SpringMVC配置文件中所配置的视图解析器解析，视图名称拼接视图前缀和视图后缀所得到的最终路径，会通过转发的方式实现跳转
 
@@ -715,7 +714,7 @@ public String testHello(){
 }
 ```
 
-### 2、转发视图
+## 2、转发视图
 
 SpringMVC中默认的转发视图是InternalResourceView
 
@@ -732,7 +731,7 @@ public String testForward(){
 }
 ```
 
-### 3、重定向视图
+## 3、重定向视图
 
 SpringMVC中默认的重定向视图是RedirectView
 
@@ -750,7 +749,7 @@ public String testRedirect(){
 > 注：
 > 重定向视图在解析时，会先将redirect:前缀去掉，然后会判断剩余部分是否以/开头，若是则会自动拼接上下文路径
 
-### 4、视图控制器view-controller
+## 4、视图控制器view-controller
 
 当控制器方法中，仅仅用来实现页面跳转，即只需要设置视图名称时，可以将处理器方法使用view-controller标签进行表示
 
@@ -784,7 +783,7 @@ REST：**Re**presentational **S**tate **T**ransfer，表现层资源状态转移
 
 状态转移说的是：在客户端和服务器端之间转移（transfer）代表资源状态的表述。通过转移和操作资源的表述，来间接实现操作资源的目的。
 
-### 2、RESTful的实现
+## 2、RESTful的实现
 
 具体说，就是 HTTP 协议里面，四个表示操作方式的动词：GET、POST、PUT、DELETE。
 
@@ -799,7 +798,7 @@ REST 风格提倡 URL 地址使用统一的风格设计，从前到后各个单�
 | 删除操作 | deleteUser?id=1  | user/1-->delete请求方式 |
 | 更新操作 | updateUser       | user-->put请求方式      |
 
-### 3、HiddenHttpMethodFilter
+## 3、HiddenHttpMethodFilter
 
 由于浏览器只支持发送get和post方式的请求，那么该如何发送put和delete请求呢？
 
@@ -848,7 +847,7 @@ b>当前请求必须传输请求参数_method
 
 # 八、RESTful案例
 
-### 1、准备工作
+## 1、准备工作
 
 和传统 CRUD 一样，实现对员工信息的增删改查。
 
@@ -967,7 +966,7 @@ b>当前请求必须传输请求参数_method
   }
   ```
 
-### 2、功能清单
+## 2、功能清单
 
 | 功能                | URL 地址    | 请求方式 |
 | ------------------- | ----------- | -------- |
@@ -979,7 +978,7 @@ b>当前请求必须传输请求参数_method
 | 跳转到更新数据页面√ | /employee/2 | GET      |
 | 执行更新√           | /employee   | PUT      |
 
-### 3、具体功能：访问首页
+## 3、具体功能：访问首页
 
 #### a>配置view-controller
 
@@ -1004,7 +1003,7 @@ b>当前请求必须传输请求参数_method
 </html>
 ```
 
-### 4、具体功能：查询所有员工数据
+## 4、具体功能：查询所有员工数据
 
 ##### a>控制器方法
 
@@ -1056,7 +1055,7 @@ public String getAllEmps(Model model) {
 </html>
 ```
 
-### 5、具体功能：删除
+## 5、具体功能：删除
 
 ##### a>创建处理delete请求方式的表单
 
@@ -1115,7 +1114,7 @@ public String deleteEmp(@PathVariable("id") int id) {
 }
 ```
 
-### 6、具体功能：跳转到添加数据页面
+## 6、具体功能：跳转到添加数据页面
 
 ##### a>配置view-controller
 
@@ -1134,19 +1133,19 @@ public String deleteEmp(@PathVariable("id") int id) {
 </head>
 <body>
 
-<form th:action="@{/employee}" method="post">
-    lastName:<input type="text" name="lastName"><br>
-    email:<input type="text" name="email"><br>
-    gender:<input type="radio" name="gender" value="1">male
-    <input type="radio" name="gender" value="0">female<br>
-    <input type="submit" value="add"><br>
-</form>
+    <form th:action="@{/employee}" method="post">
+        lastName:<input type="text" name="lastName"><br>
+        email:<input type="text" name="email"><br>
+        gender:<input type="radio" name="gender" value="1">male
+        <input type="radio" name="gender" value="0">female<br>
+        <input type="submit" value="add"><br>
+    </form>
 
 </body>
 </html>
 ```
 
-### 7、具体功能：执行保存
+## 7、具体功能：执行保存
 
 ##### a>控制器方法
 
@@ -1158,7 +1157,7 @@ public String addEmp(Employee employeee) {
 }
 ```
 
-### 8、具体功能：跳转到更新数据页面
+## 8、具体功能：跳转到更新数据页面
 
 ##### a>修改超链接
 
@@ -1227,10 +1226,10 @@ HttpMessageConverter提供了两个注解和两个类型：@RequestBody，@Respo
 
 ResponseEntity
 
-### 1、@RequestBody
+## 1、@RequestBody
 
+**1. 赋值形参**
 @RequestBody可以获取请求体，需要在控制器方法设置一个形参，使用@RequestBody进行标识，当前请求的请求体就会为当前注解所标识的形参赋值
-
 ```html
 <form th:action="@{/testRequestBody}" method="post">
     用户名：<input type="text" name="username"><br>
@@ -1246,12 +1245,23 @@ public String testRequestBody(@RequestBody String requestBody){
     return "success";
 }
 ```
-
 输出结果：
-
 requestBody:username=admin&password=123456
 
-### 2、RequestEntity
+**2. 自动反序列化 Json**
+使用 Postman 发送 Json 格式数据：
+![](./pictures/springMVC/postmanJson.png)
+
+@RequestBody可以接收 Json 格式数据自动反序列化，并为形参的 POJO 形参赋值：
+```java
+@RequestMapping("/handle07")
+public String handle07(@RequestBody Person person) {
+    System.out.println(person);
+    return person.toString();
+}
+```
+
+## 2、RequestEntity
 
 RequestEntity封装请求报文的一种类型，需要在控制器方法的形参中设置该类型的形参，当前请求的请求报文就会赋值给该形参，可以通过getHeaders()获取请求头信息，通过getBody()获取请求体信息
 
@@ -1268,7 +1278,7 @@ public String testRequestEntity(RequestEntity<String> requestEntity){
 requestHeader:[host:"localhost:8080", connection:"keep-alive", content-length:"27", cache-control:"max-age=0", sec-ch-ua:"" Not A;Brand";v="99", "Chromium";v="90", "Google Chrome";v="90"", sec-ch-ua-mobile:"?0", upgrade-insecure-requests:"1", origin:"http://localhost:8080", user-agent:"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36"]
 requestBody:username=admin&password=123
 
-### 3、@ResponseBody
+## 3、@ResponseBody
 
 @ResponseBody用于标识一个控制器方法，可以将该方法的返回值直接作为响应报文的响应体响应到浏览器
 
@@ -1282,7 +1292,7 @@ public String testResponseBody(){
 
 结果：浏览器页面显示success
 
-### 4、SpringMVC处理json
+## 4、SpringMVC处理json
 
 @ResponseBody处理json的步骤：
 
@@ -1318,7 +1328,7 @@ public User testResponseUser(){
 
 {"id":1001,"username":"admin","password":"123456","age":23,"sex":"男"}
 
-### 5、SpringMVC处理ajax
+## 5、SpringMVC处理ajax
 
 a>请求超链接：
 
@@ -1366,17 +1376,18 @@ public String testAjax(String username, String password){
 }
 ```
 
-### 6、@RestController注解
+## 6、@RestController注解
 
 @RestController注解是springMVC提供的一个复合注解，标识在控制器的类上，就相当于为类添加了@Controller注解，并且为其中的每个方法添加了@ResponseBody注解
 
-### 7、ResponseEntity
+## 7、ResponseEntity
 
 ResponseEntity用于控制器方法的返回值类型，该控制器方法的返回值就是响应到浏览器的响应报文
 
 # 九、文件上传和下载
 
-### 1、文件下载
+文件上传和下载使用 [SSM-SpringBoot](./SSM-SpringBoot.md) 整合中的方式，更规范、更简便。
+## ~~1、文件下载~~
 
 使用ResponseEntity实现下载文件的功能
 
@@ -1412,7 +1423,7 @@ public ResponseEntity<byte[]> testResponseEntity(HttpSession session) throws IOE
 > httpHeaders.add("Content-Disposition", "attachment;filename=pic.jpg");
 > ```
 
-### 2、文件上传
+## ~~2、文件上传~~
 
 文件上传要求form表单的请求方式必须为post，并且添加属性enctype="multipart/form-data"
 
@@ -1464,7 +1475,7 @@ public String testUp(MultipartFile photo, HttpSession session) throws IOExceptio
 
 # 十、拦截器
 
-### 1、拦截器的配置
+## 1、拦截器的配置
 
 SpringMVC中的拦截器用于拦截控制器方法的执行
 
@@ -1487,7 +1498,7 @@ SpringMVC的拦截器必须在SpringMVC的配置文件中进行配置：
 -->
 ```
 
-### 2、拦截器的三个抽象方法
+## 2、拦截器的三个抽象方法
 
 SpringMVC中的拦截器有三个抽象方法：
 
@@ -1497,7 +1508,7 @@ postHandle：控制器方法执行之后执行postHandle()
 
 afterComplation：处理完视图和模型数据，渲染视图完毕之后执行afterComplation()
 
-### 3、多个拦截器的执行顺序
+## 3、多个拦截器的执行顺序
 
 a>若每个拦截器的preHandle()都返回true
 
@@ -1511,7 +1522,7 @@ preHandle()返回false和它之前的拦截器的preHandle()都会执行，postH
 
 # 十一、异常处理器
 
-### 1、基于配置的异常处理
+## 1、基于配置的异常处理
 
 SpringMVC提供了一个处理控制器方法执行过程中所出现的异常的接口：HandlerExceptionResolver
 
@@ -1537,7 +1548,7 @@ SpringMVC提供了自定义的异常处理器SimpleMappingExceptionResolver，�
 </bean>
 ```
 
-### 2、基于注解的异常处理
+## 2、基于注解的异常处理
 
 ```java
 //@ControllerAdvice将当前类标识为异常处理的组件
@@ -1559,7 +1570,7 @@ public class ExceptionController {
 
 使用配置类和注解代替web.xml和SpringMVC配置文件的功能
 
-### 1、创建初始化类，代替web.xml
+## 1、创建初始化类，代替web.xml
 
 在Servlet3.0环境中，容器会在类路径中查找实现javax.servlet.ServletContainerInitializer接口的类，如果找到的话就用它来配置Servlet容器。
 Spring提供了这个接口的实现，名为SpringServletContainerInitializer，这个类反过来又会查找实现WebApplicationInitializer的类并将配置的任务交给它们来完成。Spring3.2引入了一个便利的WebApplicationInitializer基础实现，名为AbstractAnnotationConfigDispatcherServletInitializer，当我们的类扩展了AbstractAnnotationConfigDispatcherServletInitializer并将其部署到Servlet3.0容器的时候，容器会自动发现它，并用它来配置Servlet上下文。
@@ -1609,7 +1620,7 @@ public class WebInit extends AbstractAnnotationConfigDispatcherServletInitialize
 }
 ```
 
-### 2、创建SpringConfig配置类，代替spring的配置文件
+## 2、创建SpringConfig配置类，代替spring的配置文件
 
 ```java
 @Configuration
@@ -1618,7 +1629,7 @@ public class SpringConfig {
 }
 ```
 
-### 3、创建WebConfig配置类，代替SpringMVC的配置文件
+## 3、创建WebConfig配置类，代替SpringMVC的配置文件
 
 ```java
 @Configuration
@@ -1702,7 +1713,7 @@ public class WebConfig implements WebMvcConfigurer {
 }
 ```
 
-### 4、测试功能
+## 4、测试功能
 
 ```java
 @RequestMapping("/")
@@ -1713,7 +1724,7 @@ public String index(){
 
 # 十三、SpringMVC执行流程
 
-### 1、SpringMVC常用组件
+## 1、SpringMVC常用组件
 
 - DispatcherServlet：**前端控制器**，不需要工程师开发，由框架提供
 
@@ -1739,7 +1750,7 @@ public String index(){
 
 作用：将模型数据通过页面展示给用户
 
-### 2、DispatcherServlet初始化过程
+## 2、DispatcherServlet初始化过程
 
 DispatcherServlet 本质上是一个 Servlet，所以天然的遵循 Servlet 的生命周期。所以宏观上是 Servlet 生命周期来进行调度。
 
@@ -1856,7 +1867,7 @@ protected void initStrategies(ApplicationContext context) {
 }
 ```
 
-### 3、DispatcherServlet调用组件处理请求
+## 3、DispatcherServlet调用组件处理请求
 
 ##### a>processRequest()
 
@@ -2115,7 +2126,7 @@ private void processDispatchResult(HttpServletRequest request, HttpServletRespon
 }
 ```
 
-### 4、SpringMVC的执行流程
+## 4、SpringMVC的执行流程
 
 1) 用户向服务器发送请求，请求被SpringMVC 前端控制器 DispatcherServlet捕获。
 
@@ -2127,15 +2138,7 @@ i. 再判断是否配置了mvc:default-servlet-handler
 
 ii. 如果没配置，则控制台报映射查找不到，客户端展示404错误
 
-![image-20210709214911404](img/img006.png)
-
-![image-20210709214947432](img/img007.png)
-
 iii. 如果有配置，则访问目标资源（一般为静态资源，如：JS,CSS,HTML），找不到客户端也会展示404错误
-
-![image-20210709215255693](img/img008.png)
-
-![image-20210709215336097](img/img009.png)
 
 b) 存在则执行下面的流程
 

@@ -119,7 +119,7 @@ public interface UserMapper {
 ```
 
 ## 5、创建MyBatis的映射文件
-相关概念： ORM （ Object R elationship M apping）对象关系映射。
+相关概念： **ORM** （ **O**bject **R**elationship **M**apping）对象关系映射。
 - 对象：Java的实体类对象
 - 关系：关系型数据库
 - 映射：二者之间的对应关系
@@ -178,9 +178,9 @@ int result = userMapper.addUser();
 //sqlSession.commit();
 ```
 
-> SqlSession：代表Java程序和 数据库 之间的 会话 。（HttpSession是Java程序和浏览器之间的会话）。
+> SqlSession：代表**Java程序**和**数据库**之间的会话 。（HttpSession是Java程序和浏览器之间的会话）。
 > SqlSessionFactory：是“生产”SqlSession的“工厂”。
-> 工厂模式：如果创建某一个对象，使用的过程基本固定，那么我们就可以把创建这个对象的相关代码封装到一个“工厂类”中，以后都使> 用这个工厂类来“生产”我们需要的对象。
+> 工厂模式：如果创建某一个对象，使用的过程基本固定，那么我们就可以把创建这个对象的相关代码封装到一个“工厂类”中，以后都使用这个工厂类来“生产”我们需要的对象。
 
 ## 7 、加入log4j2日志功能
 
@@ -254,7 +254,7 @@ FATAL(致命)>ERROR(错误)>WARN(警告)>INFO(信息)>DEBUG(调试)从左到右�
 核心配置文件中的标签必须按照固定的顺序：
 properties?,settings?,typeAliases?,typeHandlers?,objectFactory?,objectWrapperFactory?,reflectorFactory?,plugins?,environments?,databaseIdProvider?,mappers?
 
-数据源配置文件：
+数据源配置文件 `jdbc.properties` ：
 ```properties
 jdbc.username=root
 jdbc.password=123456
@@ -344,8 +344,7 @@ MyBatis 核心配置文件：
 ```
 
 > 注意：
-> 1、查询的标签select必须设置属性resultType或resultMap，用于设置实体类和数据库表的映射
-> 关系
+> 1、查询的标签select必须设置属性resultType或resultMap，用于设置实体类和数据库表的映射关系：
 > resultType：自动映射，用于属性名和表中字段名一致的情况
 > resultMap：自定义映射，用于一对多或多对一或字段名和属性名不一致的情况
 > 2、当查询的数据为多条时，不能使用实体类作为返回值，只能使用集合，否则会抛出异常TooManyResultsException；但是若查询的数据只有一条，可以使用实体类或集合作为返回值
@@ -362,13 +361,12 @@ ${}使用字符串拼接的方式拼接sql，若为字符串类型或日期类�
 
 > 例如： `SELECT * FROM t_user WHERE username = '${username}'`
 
-## 2 、多个字面量类型的参数
-若mapper接口中的方法参数为多个时
-此时MyBatis会自动将这些参数放在一个map集合中，以 arg0,arg1... 为键，以参数为值；以 param1,param2... 为键，以参数为值；因此只需要通过${}和#{}访问map集合的键就可以获取相对应的值，注意${}需要手动加单引号
+## 2 、多个字面量类型的参数（了解）
+若mapper接口中的方法参数为多个时，此时MyBatis会自动将这些参数放在一个map集合中，以 arg0,arg1... 为键，以参数为值；以 param1,param2... 为键，以参数为值；因此只需要通过${}和#{}访问map集合的键就可以获取相对应的值，注意${}需要手动加单引号
 
 > 例如： `SELECT * FROM t_user WHERE username = #{arg0} AND password = #{param2}`
 
-## 3 、map集合类型的参数
+## 3 、map集合类型的参数（了解）
 若mapper接口中的方法需要的参数为多个时，此时可以手动创建map集合，将这些数据放在map中只需要通过${}和#{}访问map集合的键就可以获取相对应的值，注意${}需要手动加单引号
 
 ```xml
@@ -385,8 +383,7 @@ ${}使用字符串拼接的方式拼接sql，若为字符串类型或日期类�
 > 传递实体类中的参数获取通过 getXxx 和 setXxx 方法。
 
 ## 5 、使用@Param标识参数
-可以通过@Param注解标识mapper接口中的方法参数
-此时，会将这些参数放在map集合中，以@Param注解的value属性值为键，以参数为值；以param1,param2...为键，以参数为值；只需要通过${}和#{}访问map集合的键就可以获取相对应的值，注意${}需要手动加单引号
+可以通过@Param注解标识mapper接口中的方法参数，此时，会将这些参数放在map集合中，以@Param注解的value属性值为键，以参数为值；以param1,param2...为键，以参数为值；只需要通过${}和#{}访问map集合的键就可以获取相对应的值，注意${}需要手动加单引号
 
 # 六、MyBatis的各种查询功能
 

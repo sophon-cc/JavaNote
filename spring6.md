@@ -356,14 +356,14 @@ jdbc.driver=com.mysql.cj.jdbc.Driver
 
 #### Bean 的生命周期
 具体生命周期过程
-1. bean 对象创建（调用无参构造器）。
-2. 给 bean 对象设置属性。
-3. bean 的后置处理器（初始化之前）。
-4. bean 对象初始化（需在配置 bean 时指定初始化方法）。
-5. bean 的后置处理器（初始化之后）。
-6. bean 对象就绪可以使用。
-7. bean 对象销毁（需在配置 bean 时指定销毁方法）。
-8. IOC 容器关闭。
+1. 创建 bean 实例（调用无参构造器或工厂方法）
+2. 填充属性（依赖注入）
+3. 调用 Aware 接口（如 BeanNameAware、ApplicationContextAware）
+4. 执行 BeanPostProcessor 的 `postProcessBeforeInitialization()`
+5. 初始化 bean（执行 `afterPropertiesSet()` 或自定义 `init-method`）
+6. 执行 BeanPostProcessor 的 `postProcessAfterInitialization()`
+7. Bean 就绪，可被使用
+8. 容器关闭时，执行销毁方法（如 `destroy()` 或 `destroy-method`）
 
 #### FactoryBean
 > 区分：BeanFactory: Spring 实现 IoC 容器的顶层接口。
@@ -868,14 +868,14 @@ AOP（Aspect Oriented Programming）是一种设计思想，是软件设计领�
 **5.代理**
 向目标对象应用通知之后创建的代理对象。
 
-**6.连接点**
+**6.连接点（JoinPoint）**
 ![](./pictures/spring6/joinPoint.png)
 
-这也是一个纯逻辑概念，不是语法定义的。
+这也是一个纯**逻辑概念**，不是语法定义的。
 
 把方法排成一排，每一个横切位置看成 x 轴方向，把方法从上到下执行的顺序看成 y 轴，x 轴和 y 轴的交叉点就是连接点。通俗说，就是 spring 允许你使用通知的地方
 
-**切入点**
+**切入点（PointCut）**
 定位连接点的方式。
 
 每个类的方法中都包含多个连接点，所以连接点是类中客观存在的事物（从逻辑上来说）。
@@ -884,7 +884,7 @@ AOP（Aspect Oriented Programming）是一种设计思想，是软件设计领�
 
 Spring 的 AOP 技术可以通过切入点定位到特定的连接点。通俗说，要实际去增强的方法
 
-切点通过 org.springframework.aop.Pointcut 接口进行描述，它使用类和方法作为连接点的查询条件。
+切点通过 org.springframework.aop.Pointcut 接口进行描述，它使用类和方法作为**连接点的查询条件**。
 
 #### 基于注解的 AOP
 ##### Spring AOP
@@ -914,6 +914,15 @@ Spring 的 AOP 技术可以通过切入点定位到特定的连接点。通俗�
 >     <groupId>org.springframework</groupId>
 >     <artifactId>spring-aspects</artifactId>
 >     <version>6.0.2</version>
+> </dependency>
+> ```
+> 
+> spring boot 中只需要一个：
+> ```xml
+> <!--springBoot aop依赖-->
+> <dependency>
+>     <groupId>org.springframework.boot</groupId>
+>     <artifactId>spring-boot-starter-aop</artifactId>
 > </dependency>
 > ```
 
@@ -1050,6 +1059,10 @@ public class CalculatorImpl implements Calculator {
     - 正确示例：`execution(public int *..*Service.*(.., int))`
     - 错误示例：`execution( int *..*Service.*(.., int))`
 
+> 附：
+> `args(int, int)` 可以匹配所有参数满足要求的方法；
+> `@annotation(annotation-type)` 匹配所有被特定注解标记的方法。
+
 ##### 创建切面类
 ```java
 @Aspect // 切面类
@@ -1082,11 +1095,12 @@ public class LogAspect {
     public Object AroundMethod(ProceedingJoinPoint joinPoint) {
         Object returnValue = null;
         try {
-            System.out.println("Logger -> 1 After Around Method: " + joinPoint.getSignature().getName() + " " + Arrays.toString(joinPoint.getArgs()));
+            System.out.println("Logger -> 1 Before Around Method: " + joinPoint.getSignature().getName() + " " + Arrays.toString(joinPoint.getArgs()));
             returnValue = joinPoint.proceed();
             System.out.println("Logger -> 2 AfterReturning Around Method: " + joinPoint.getSignature().getName() + " retValue = " + returnValue);
         } catch (Throwable throwable) {
             System.out.println("Logger -> 3 AfterThrowing Around Method: " + joinPoint.getSignature().getName() + " " + throwable);
+            throw e;
         } finally {
             System.out.println("Logger -> 4 After Around Method: " + joinPoint.getSignature().getName() + " " + Arrays.toString(joinPoint.getArgs()));
         }
@@ -1094,6 +1108,9 @@ public class LogAspect {
     }
 }
 ```
+
+> 注意：环绕通知应当将异常继续向外抛出，方便其它程序继续处理。
+
 ##### 重用切入点表达式
 注意到多个相同的切入点表达式被反复书写，重用切入点表达式就是为了定义一次切入点表达式，其它地方需要只需要引用就可以了。
 
@@ -1133,6 +1150,22 @@ public void beforeMethod(JoinPoint joinPoint) {
 使用@Order注解可以控制切面的优先级：
 - @Order(较小的数)：优先级高
 - @Order(较大的数)：优先级低
+
+```java
+@Order(1) // 先打印日志
+@Aspect // 切面类
+@Component // IoC 容器
+public class LogAspect {
+    // 日志切面逻辑 ...
+}
+
+@Order(2) // 再执行授权等操作
+@Aspect // 切面类
+@Component // IoC 容器
+public class AuthAspect {
+    // 权限切面逻辑 ...
+}
+```
 
 ##### 全注解开发 AOP
 编写配置类如下即可：
@@ -1301,13 +1334,52 @@ Spring 框架对 JDBC 进行封装，使用 JdbcTemplate 方便实现对数据�
 </dependencies>
 ```
 
+> spring boot 依赖：
+> ```xml
+> <dependencies>
+>      <dependency>
+>          <groupId>org.springframework.boot</groupId>
+>          <artifactId>spring-boot-starter</artifactId>
+>      </dependency>
+>      
+>     <dependency>
+>         <groupId>org.springframework.boot</groupId>
+>         <artifactId>spring-boot-starter-data-jdbc</artifactId>
+>     </dependency>
+> 
+>     <dependency>
+>         <groupId>com.mysql</groupId>
+>         <artifactId>mysql-connector-j</artifactId>
+>         <scope>runtime</scope>
+>     </dependency>
+>     <dependency>
+>         <groupId>org.projectlombok</groupId>
+>         <artifactId>lombok</artifactId>
+>         <optional>true</optional>
+>     </dependency>
+>     <dependency>
+>         <groupId>org.springframework.boot</groupId>
+>         <artifactId>spring-boot-starter-test</artifactId>
+>         <scope>test</scope>
+>     </dependency>
+> </dependencies>
+> ```
+
 **创建 jdbc.properties**
 ```java
 jdbc.user=root
 jdbc.password=root
-jdbc.url=jdbc:mysql://localhost:3306/spring?characterEncoding=utf8&useSSL=false
+spring.datasource.url=jdbc:mysql://localhost:3306/spring?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai
 jdbc.driver=com.mysql.cj.jdbc.Driver
 ```
+
+> spring boot 在 application.properties 中配置：
+> ```properties
+> spring.datasource.username=root
+> spring.datasource.password=123456
+> spring.datasource.url=jdbc:mysql://localhost:3306/spring?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai
+> spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+> ```
 
 **配置 Spring 配置文件**
 beans.xml
@@ -1563,10 +1635,10 @@ public void buyBook(Integer bookId, Integer userId) {
 在 service 类中有 a() 方法和 b() 方法，a() 方法上有事务，b() 方法上也有事务，当 a() 方法执行过程中调用了 b() 方法，事务是如何传递的？合并到一个事务里？还是开启一个新的事务？这就是事务传播行为。
 
 一共有七种传播行为：
-- REQUIRED：支持当前事务，如果不存在就新建一个(默认) **【没有就新建，有就加入】**。
+- **REQUIRED**：支持当前事务，如果不存在就新建一个(默认) **【没有就新建，有就加入】**。
 - SUPPORTS：支持当前事务，如果当前没有事务，就以非事务方式执行 **【有就加入，没有就不管了】**。
 - MANDATORY：必须运行在一个事务中，如果当前没有事务正在发生，将抛出一个异常 **【有就加入，没有就抛异常】**。
-- REQUIRES_NEW：开启一个新的事务，如果一个事务已经存在，则将这个存在的事务挂起 **【不管有没有，直接开启一个新事务，开启的新事务和之前的事务不存在嵌套关系，之前事务被挂起】**。
+- **REQUIRES_NEW**：开启一个新的事务，如果一个事务已经存在，则将这个存在的事务挂起 **【不管有没有，直接开启一个新事务，开启的新事务和之前的事务不存在嵌套关系，之前事务被挂起。常用于不能因为主事务失败而回滚的子任务】**。
 - NOT_SUPPORTED：以非事务方式运行，如果有事务存在，挂起当前事务 **【不支持事务，存在就挂起】**。
 - NEVER：以非事务方式运行，如果有事务存在，抛出异常 **【不支持事务，存在就抛异常】**。
 - NESTED：如果当前正有一个事务在进行中，则该方法应当运行在一个嵌套式事务中。被嵌套的事务可以独立于外层事务进行提交或回滚。如果外层事务不存在，行为就像 REQUIRED 一样。 **【有事务的话，就在这个事务里再嵌套一个完全独立的事务，嵌套的事务可以独立的提交和回滚。没有事务就和 REQUIRED 一样。】**
@@ -1870,9 +1942,9 @@ InputStreamResource 是给定的输入流(InputStream)的 Resource 实现。它�
 #### ByteArrayResource
 字节数组的 Resource 实现类。通过给定的数组创建了一个 ByteArrayInputStream。它对于从任何给定的字节数组加载内容非常有用，而无需求助于单次使用的 InputStreamResource 。
 
-### ResourceLoader 接口
+### ResourceLoader 接口（重点）
 Spring 提供如下两个标志性接口：
-1. ResourceLoader ： 该接口实现类的实例可以获得一个Resource实例。
+1. **ResourceLoader** ： 该接口实现类的实例可以获得一个Resource实例。
 2. ResourceLoaderAware ： 该接口实现类的实例将获得一个ResourceLoader的引用。
 
 在 ResourceLoader 接口里有如下方法：
@@ -1880,12 +1952,15 @@ Resource getResource（String location） ： 该接口仅有这个方法，用�
 
 Spring 将采用和 ApplicationContext 相同的策略来访问资源。也就是说，如果 ApplicationContext 是 FileSystemXmlApplicationContext，res 就是FileSystemResource 实例；如果 ApplicationContext 是ClassPathXmlApplicationContext，res 就是 ClassPathResource 实例
 
-当 Spring 应用需要进行资源访问时，实际上并不需要直接使用 Resource 实现类，而是调用 ResourceLoader 实例的 getResource() 方法来获得资源，ReosurceLoader 将会负责选择 Reosurce 实现类，也就是确定具体的资源访问策略，从而将应用程序和具体的资源访问策略分离开来
+当 Spring 应用需要进行资源访问时，实际上并不需要直接使用 Resource 实现类，而是调用 ResourceLoader 实例的 getResource() 方法来获得资源，ReosurceLoader 将会负责**选择 Reosurce 实现类**，也就是确定具体的资源访问策略，从而将应用程序和具体的资源访问策略分离开来
 
 另外，使用 ApplicationContext 访问资源时，可通过不同前缀指定强制使用指定的 ClassPathResource、FileSystemResource 等实现类
 ```java
+// 返回的 Resource 实现类：ClassPathResource
 Resource res = ctx.getResource("calsspath:bean.xml");
+// 返回的 Resource 实现类：FileSystemResource
 Resrouce res = ctx.getResource("file:bean.xml");
+// 返回的 Resource 实现类：UrlResource
 Resource res = ctx.getResource("http://localhost:8080/beans.xml");
 ```
 ### ResourceLoaderAware 接口
@@ -2074,7 +2149,9 @@ public class Demo2 {
 }
 ```
 
-## 数据校验：Validation
+## 数据校验：Validation（了解）
+> 原始方式，最新方式参考 [SpringBoot 数据校验](./SSM-SpringBoot.md#数据校验)
+
 在开发中，我们经常遇到参数校验的需求，比如用户注册的时候，要校验用户名不能为空、用户名长度不超过 20 个字符、手机号是合法的手机号格式等等。如果使用普通方式，我们会把校验的代码和真正的业务处理逻辑耦合在一起，而且如果未来要新增一种校验逻辑也需要在修改多个地方。而 spring validation 允许通过注解的方式来定义对象校验规则，把校验和业务逻辑分离开，让代码编写更加方便。Spring Validation 其实就是对 Hibernate Validator 进一步的封装，方便在 Spring 中使用。
 
 在Spring中有多种校验的方式:
@@ -2100,7 +2177,7 @@ public class Demo2 {
 > </dependencies>
 > ```
 
-### 通过 Validator 接口实现
+### ~~通过 Validator 接口实现~~
 创建类实现Validator接口，实现接口方法指定校验规则：
 ```java
 import org.springframework.validation.Errors;
@@ -2149,7 +2226,7 @@ public void test() {
     System.out.println(results.getAllErrors());
 }
 ```
-### Bean Validation 注解实现
+### ~~Bean Validation 注解实现~~
 1. 创建配置类，配置 LocalValidatorFactoryBean ：
 ```java
 @Configuration
@@ -2263,7 +2340,7 @@ public class TestClass {
     }
 }
 ```
-### *基于方法实现校验
+### ~~基于方法实现校验~~
 1.创建配置类，配置 MethodValidationPostProcessor ：
 ```java
 import org.springframework.context.annotation.Bean;
@@ -2344,7 +2421,7 @@ public void testMyService1() {
 }
 ```
 
-#### 实现自定义校验
+#### ~~实现自定义校验~~
 1. 自定义校验注解：
 ```java
 import jakarta.validation.Constraint;
@@ -2402,3 +2479,54 @@ public class CannotBlankValidator implements ConstraintValidator<CannotBlank, St
     }
 }
 ```
+
+## SSM 注解补充
+> 环境基于 Spring Boot 3.5.4
+
+### profile 多环境
+1. 自定义环境标识
+```java
+@Configuration
+public class DataSourceConfig {
+    // Profile 指定环境标识 dev
+    @Profile("dev")
+    @Bean
+    public MyDataSource dev() {
+        MyDataSource dev = new MyDataSource();
+        dev.setUsername("root");
+        dev.setPassword("123456");
+        dev.setUrl("jdbc:mysql://127.0.0.1:3306/devdb");
+        dev.setDriver("com.mysql.jdbc.Driver");
+        return dev;
+    }
+
+    @Profile("test")
+    @Bean
+    public MyDataSource test() {
+        MyDataSource test = new MyDataSource();
+        test.setUsername("test");
+        test.setPassword("test123");
+        test.setUrl("jdbc:mysql://127.0.0.1:3306/testdb");
+        test.setDriver("com.mysql.jdbc.Driver");
+        return test;
+    }
+
+    @Profile("prod")
+    @Bean
+    public MyDataSource prod() {
+        MyDataSource myDataSource = new MyDataSource();
+        myDataSource.setUsername("root");
+        myDataSource.setPassword("123456");
+        myDataSource.setUrl("jdbc:mysql://127.0.0.1:3306/proddb");
+        myDataSource.setDriver("com.mysql.jdbc.Driver");
+        return myDataSource;
+    }
+}
+```
+> 若未定义环境标识，默认处于 default 环境。
+2. 激活环境标识
+在 application.properties 中配置 `spring.profiles.active=环境标识` 。即可只激活标识环境组件。
+```xml
+spring.profiles.active=prod
+```
+
