@@ -2149,8 +2149,8 @@ public class Demo2 {
 }
 ```
 
-## 数据校验：Validation（了解）
-> 原始方式，最新方式参考 [SpringBoot 数据校验](./SSM-SpringBoot.md#数据校验)
+## ~~数据校验：Validation（了解）~~
+> 原始方式，最新方式参考 [SpringBoot 数据校验](./SSM-SpringMVC.md#数据校验)
 
 在开发中，我们经常遇到参数校验的需求，比如用户注册的时候，要校验用户名不能为空、用户名长度不超过 20 个字符、手机号是合法的手机号格式等等。如果使用普通方式，我们会把校验的代码和真正的业务处理逻辑耦合在一起，而且如果未来要新增一种校验逻辑也需要在修改多个地方。而 spring validation 允许通过注解的方式来定义对象校验规则，把校验和业务逻辑分离开，让代码编写更加方便。Spring Validation 其实就是对 Hibernate Validator 进一步的封装，方便在 Spring 中使用。
 

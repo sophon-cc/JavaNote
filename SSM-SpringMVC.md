@@ -4,26 +4,6 @@
 ### 环境依赖
 ![](./pictures/SSM-SpringMVC/helloDependences.png)
 
-依赖 pom.xml：
-```xml
-<dependencies>
-    <dependency>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-web</artifactId>
-    </dependency>
-
-    <dependency>
-        <groupId>org.projectlombok</groupId>
-        <artifactId>lombok</artifactId>
-        <optional>true</optional>
-    </dependency>
-    <dependency>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-test</artifactId>
-        <scope>test</scope>
-    </dependency>
-</dependencies>
-```
 编写 HelloController ：
 ```java
 @Controller
@@ -328,7 +308,7 @@ public String updateEmployee(@RequestBody Employee employee) {
 > 允许跨域使用注解 `@CrossOrigin` 标注 Controller 方法或类。
 > CORS（Cross-Origin Resource Sharing，跨域资源共享）是一种由浏览器实现的安全机制，允许网页在“跨源”（协议/域名/端口任一不同）情况下，受控地访问另一个源的资源。
 
-#### 返回值统一
+#### 返回值统一（重要）
 为了方便前端统一处理数据，以及前后端沟通。统一返回 json 数据，json 固定格式为：
 ```json
 {
@@ -510,7 +490,7 @@ public R<Object> testException(Exception e) {
 ![](./pictures/SSM-SpringMVC/exceptionHandler.png)
 
 ### 全局异常处理
-> @RestControllerAdvice = @ResponseBody + @ControllerAdvice
+> 其中：@RestControllerAdvice = @ResponseBody + @ControllerAdvice
 ```java
 @RestControllerAdvice
 public class TestExceptionController {
@@ -753,7 +733,7 @@ JSR 303 是 Java 为 Bean 数据合法性校验 提供的标准框架，它已�
 </dependency>
 ```
 
-2.classpath:resources 下配置 `application.yaml`：
+2./resources 下配置 `application.yaml`：
 ```yaml
 # springdoc-openapi项目配置
 springdoc:

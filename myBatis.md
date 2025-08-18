@@ -355,7 +355,7 @@ MyBatis获取参数值的两种方式： ${} 和 #{}
 ${}的本质就是字符串拼接，#{}的本质就是占位符赋值
 ${}使用字符串拼接的方式拼接sql，若为字符串类型或日期类型的字段进行赋值时，需要手动加单引号；但是#{}使用占位符赋值的方式拼接sql，此时为字符串类型或日期类型的字段进行赋值时，可以自动添加单引号。
 
-## 1 、单个字面量类型的参数
+## 1 、单个字面量类型的参数（了解）
 若mapper接口中的方法参数为单个的字面量类型
 此时可以使用${}和#{}以任意的名称获取参数的值，注意${}需要手动加单引号
 
@@ -629,7 +629,7 @@ column：设置映射关系中表中的字段名
 
 查询员工信息以及员工所对应的部门信息
 
-### a>级联方式处理映射关系
+### a>级联方式处理映射关系（了解）
 ```xml
 <resultMap id="empAndDeptResultOne" type="Emp">
     <id property="eid" column="eid"></id>
@@ -814,6 +814,15 @@ List<Emp> getDeptAnEmpStepTwo(@Param("did") int did);
 # 九、动态SQL
 Mybatis框架的动态SQL技术是一种根据特定条件动态拼装SQL语句的功能，它存在的意义是为了解决拼接SQL语句字符串时的痛点问题。
 
+由于编写 SQL 的文件为 `.xml` 格式
+| 转义字符 | 名称         |
+|----------|--------------|
+| `&amp;`  | 和号(ampersand) |
+| `&lt;`   | 小于号(less than) |
+| `&gt;`   | 大于号(greater than) |
+| `&quot;` | 双引号(quotation mark) |
+| `&apos;` | 单引号(apostrophe) |
+
 ## 1 、if
 if标签可通过test属性的表达式进行判断，若表达式的结果为true，则标签中的内容会执行；反之标签中的内容不会执行
 
@@ -861,7 +870,24 @@ and去掉。
 </select>
 ```
 
-> 注意：where标签不能去掉条件最后多余的and
+> 注意：`where` 标签不能去掉条件最后多余的and。相似标签 `set` 用于 update 语句，`set` 用于去除后缀多余的 ',' 。
+> ```xml
+> <update id="updateEmp">
+>     UPDATE t_emp
+>     <set>
+>         <if test="empName != null and empName != ''">
+>             emp_name = #{empName},
+>         </if>
+>         <if test="age != null">
+>             age = #{age},
+>         </if>
+>         <if test="empSalary != null">
+>             emp_salary = #{empSalary},
+>         </if>
+>     </set>
+>     WHERE id = #{id}
+> </update>
+> ```
 
 ## 3 、trim（了解）
 trim用于去掉或添加标签中的内容
@@ -998,7 +1024,7 @@ false：读写缓存；会返回缓存对象的拷贝（通过序列化）。这
 如果一级缓存也没有命中，则查询数据库。
 > SqlSession关闭之后，一级缓存中的数据会写入二级缓存。
 
-## 5 、整合第三方缓存EHCache
+## 5 、整合第三方缓存EHCache（了解）
 
 ### a>添加依赖
 ```xml
@@ -1090,7 +1116,7 @@ false：读写缓存；会返回缓存对象的拷贝（通过序列化）。这
 | diskExpiryThreadIntervalSeconds | 否       | 磁盘缓存的清理线程运行间隔，默认120秒                                |
 | memoryStoreEvictionPolicy       | 否       | 内存缓存达到最大时的移除策略，默认LRU（可选LFU、FIFO）               |
 
-# 十一、MyBatis的逆向工程
+# 十一、MyBatis的逆向工程（了解）
 正向工程：先创建Java实体类，由框架负责根据实体类生成数据库表。Hibernate是支持正向工程
 的。
 逆向工程：先创建数据库表，由框架负责根据数据库表，反向生成如下资源：
@@ -1212,11 +1238,13 @@ false：读写缓存；会返回缓存对象的拷贝（通过序列化）。这
 
 ## 2 、QBC查询
 
-# 十二、分页插件
+# 十二、分页插件（了解）
 
-## 1 、分页插件使用步骤
+> 原始方式，最新方式参考 [SpringBoot 数据校验](./SSM-MyBatis.md#分页插件)
 
-### a>添加依赖
+## ~~1 、分页插件使用步骤~~
+
+### ~~a>添加依赖~~
 ```xml
 <!-- 分页插件依赖 -->
 <dependency>
@@ -1232,10 +1260,10 @@ false：读写缓存；会返回缓存对象的拷贝（通过序列化）。这
 </plugins>
 ```
 
-#### b>配置分页插件
+### ~~b>配置分页插件~~
 在MyBatis的核心配置文件中配置插件
 
-## 2 、分页插件的使用
+## ~~2 、分页插件的使用~~
 
 #### a>在查询功能之前使用PageHelper.startPage(int pageNum, int pageSize)开启分页功能
 > pageNum：当前页的页码 // 页面从 1 开始

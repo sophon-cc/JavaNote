@@ -1,5 +1,9 @@
 [toc]
+
+> 收获简化开发插件：1.maven-search；2.JBLJavaToWeb。
+
 # 一、maven 简介和快速入门
+
 ## 1.1 Maven 介绍
 Maven 是一款为 Java 项目构建管理、依赖管理的工具(软件)，使用 Maven 可以自动化构建测试、打包和发布项目，大大提高了开发效率和质量。
 
