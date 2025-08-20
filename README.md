@@ -14,4 +14,4 @@
 | 10. springMVC.md      | B 站尚硅谷SpringMVC教程丨一套快速上手spring mvc |
 | 11. myBatis.md        | B 站【尚硅谷】MyBatis零基础入门教程（细致全面，快速上手mybatis） |
 | 12. maven.md          | B 站【尚硅谷】2023 SSM（前 12 集是 maven） |
-| 12. SSM-SpringMVC.md、SSM-MyBatis.md | B 站尚硅谷最新版SSM教程，基于AI的全新ssm框架实战 |
+| 12. SSM-SpringMVC.md、SSM-MyBatis.md、SSM-SpringBoot.md | B 站尚硅谷最新版SSM教程，基于AI的全新ssm框架实战 |
