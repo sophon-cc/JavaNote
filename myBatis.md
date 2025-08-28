@@ -1253,15 +1253,15 @@ false：读写缓存；会返回缓存对象的拷贝（通过序列化）。这
     <version>5.3.2</version>
 </dependency>
 ```
+
+### ~~b>配置分页插件~~
+在MyBatis的核心配置文件中配置插件
 ```xml
 <plugins>
     <!--设置分页插件-->
     <plugin interceptor="com.github.pagehelper.PageInterceptor"></plugin>
 </plugins>
 ```
-
-### ~~b>配置分页插件~~
-在MyBatis的核心配置文件中配置插件
 
 ## ~~2 、分页插件的使用~~
 

@@ -12,7 +12,7 @@
 ```sql
 spring.datasource.username=root
 spring.datasource.password=123456
-spring.datasource.url=jdbc:mysql://localhost:3306/mybatis-example?eUnicode=true&characterEncoding=UTF-8&useSSL=false&rverTimezone=Asia/Shanghai
+spring.datasource.url=jdbc:mysql://localhost:3306/mybatis_plus?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai
 spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
 ```
 
