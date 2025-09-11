@@ -411,7 +411,7 @@ public class UserLoginSuccessEvent { // 用户登录成功事件
 > 注意：定义的事件类只是 POJO，并非组件。
 
 2、事件发布
-- 组件实现 ApplicationEventPublisherAware
+- 组件实现 ApplicationEventPublisherAware（了解）
 - 自动注入 ApplicationEventPublisher
 
 发布用户登录成功事件（UserController.java）：

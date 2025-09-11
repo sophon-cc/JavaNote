@@ -455,11 +455,11 @@ public class MyHandlerInterceptor implements HandlerInterceptor {
 ```
 
 ### 拦截器和过滤器的区别
-| 对比项      | 控制器 (HandlerInterceptor)                                  | 过滤器 (Filter)                                             |
+| 对比项      | 拦截器 (HandlerInterceptor)                                  | 过滤器 (Filter)                                             |
 | -------- | -------------------------------------------------------------- | -------------------------------------------------------- |
 | **所属框架** | Spring 框架                                                | Servlet 规范                                               |
 | **放行方式** | `preHandle` 返回 `true` 放行请求                            | `chain.doFilter()` 放行请求                                  |
-| **整合性**  | 可直接整合 Spring 容器的所有组件（如注入 Bean）                | 不受 Spring 容器管理，需通过 `@Component` 或手动注册                    |
+| **整合性**  | 可直接整合 Spring 容器的所有组件                | 不受 Spring 容器管理，需通过 `@Component` 或手动注册                    |
 | **拦截范围** | 仅拦截 SpringMVC 能处理的请求（如 `.do`、Rest API）          | 拦截所有 Web 请求，包括静态资源等                                      |
 | **推荐场景** | 业务层控制（如权限校验、登录状态验证、接口拦截等）                                      | 低层技术控制（如字符编码、跨域、XSS 过滤）                                  |
 | **接口定义** | 实现 `HandlerInterceptor` 接口                              | 实现 `javax.servlet.Filter` 接口                             |
@@ -663,7 +663,7 @@ JSR 303 是 Java 为 Bean 数据合法性校验 提供的标准框架，它已�
     ```
     测试结果：
     ![](./pictures/SSM-SpringMVC/genderValidate.png)
-7. 结合校验注解 message属性 与 i18n 文件，实现错误消息国际化
+7. 结合校验注解 message属性 与 i18n 文件，实现错误消息国际化（了解）
     注解 message 中使用 {gender.message} 占位，实际内容在 `messages.properties` 中
     ```java
     @Gender(message = "{gender.message}")
@@ -683,7 +683,7 @@ JSR 303 是 Java 为 Bean 数据合法性校验 提供的标准框架，它已�
 
 8. 结合全局异常处理，统一处理数据校验错误
     此时数据校验功能已经很齐全了，但是统一在 Employee 实体类上标注的校验针对 `addEmployee` 好用，但是针对 `updateEmployee` 并不好用，因为 `updateEmployee` 可以存在部分内容为空，且多要求 `id` 必须存在。
-    为了解决这一问题有两种方式：1.使用 SpringBoot 的校验标签进行分组校验；2.针对不同的业务要求（前端、数据库），编写不同的实体类，如：`EmployeeAddVo`。推荐第二种方式，更满足设计模式中的**单一职责**原则。
+    为了解决这一问题有两种方式：1.使用 SpringBoot 的校验标签进行分组校验；2.针对不同的业务要求（前端、数据库），编写不同的实体类（XxxVO、XxxDTO），如：`EmployeeAddVo`。推荐第二种方式，更满足设计模式中的**单一职责**原则。
     为添加功能重新定义实体类 EmployeeAddVo：
     ```java
     @Data

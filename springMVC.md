@@ -525,6 +525,8 @@ public String testServletAPI3(String username, String password, @RequestParam("h
 }
 ```
 
+> 若前端返回字符串，如 `www.xx.com?ids=1,2,3`。此时使用 `@RequestParam("ids") List<Long> ids` MVC框架会自行进行解析并转换。
+
 ## 4、@RequestHeader
 
 @RequestHeader是将请求头信息和控制器方法的形参创建映射关系

@@ -225,6 +225,7 @@ PageHelper 是可以用在 MyBatis 中的一个强大的分页插件。
 ```xml
 <dependency>
     <groupId>com.github.pagehelper</groupId>
+    <!--  pagehelper-spring-boot-starter -->
     <artifactId>pagehelper</artifactId>
     <version>6.1.1</version>
 </dependency>

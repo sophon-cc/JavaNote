@@ -522,6 +522,7 @@ System.out.println("update=" + update);
 MyBatis Plus自带分页插件，只要简单的配置即可实现分页功能。
 
 **a> 引入依赖**
+```xml
 <!-- MyBatis-Plus 扩展插件 -->
 <dependency>
     <groupId>com.baomidou</groupId>
@@ -595,6 +596,7 @@ Page<User> selectPageVO(@Param("page") Page<User> page, @Param("age") Integer ag
 > 乐观锁（@Version + OptimisticLockerInnerInterceptor）自动生效的前提：调用 MP 的内置更新方法（updateById、update(entity, wrapper)）。拦截器会在 WHERE 拼 version = ? 并在更新时把 version 自增。
 
 **1、引入依赖**
+```xml
 <!-- MyBatis-Plus 扩展插件 -->
 <dependency>
     <groupId>com.baomidou</groupId>
@@ -625,11 +627,11 @@ public class MybatisPlusConfig {
 ```sql
 CREATE TABLE t_product
 (
-id BIGINT(20) NOT NULL COMMENT '主键ID',
-NAME VARCHAR(30) NULL DEFAULT NULL COMMENT '商品名称',
-price INT(11) DEFAULT 0 COMMENT '价格',
-VERSION INT(11) DEFAULT 0 COMMENT '乐观锁版本号',
-PRIMARY KEY (id)
+    id BIGINT(20) NOT NULL COMMENT '主键ID',
+    NAME VARCHAR(30) NULL DEFAULT NULL COMMENT '商品名称',
+    price INT(11) DEFAULT 0 COMMENT '价格',
+    VERSION INT(11) DEFAULT 0 COMMENT '乐观锁版本号',
+    PRIMARY KEY (id)
 );
 
 INSERT INTO t_product (id, NAME, price) VALUES (1, '外星人笔记本', 100);
