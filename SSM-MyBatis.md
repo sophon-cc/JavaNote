@@ -52,7 +52,7 @@ public interface EmpMapper {
 </mapper>
 ```
 > 不需要手动整合 MyBatis 核心配置文件，此时需要在 `application.properties` 中指明 `xxxMapper.xml` 在那个目录下：
-> ```xml
+> ```properties
 > # 告诉 MyBatis 去哪找映射文件（必须配置）
 > mybatis.mapper-locations=classpath:mapper/**.xml
 > # 开启下划线转驼峰
@@ -91,7 +91,7 @@ public interface EmpMapper {
 
 > 方式一查询结果集出现了相同的列 `id` ，如果不起别名 MyBatis 会出现逻辑错误。
 
-**方式二：分布查询**
+**方式二：分步查询**
 `OrderMapper.xml`：
 ```xml
 <resultMap id="OrderWithCustomerRM" type="com.mybatishello.bean.Order">
@@ -142,7 +142,7 @@ public interface EmpMapper {
 
 > 方式一查询结果集出现了相同的列 `id` ，如果不起别名 MyBatis 会出现逻辑错误。
 
-**方式二：分布查询**
+**方式二：分步查询**
 `CustomerMapper.xml`：
 ```xml
 <resultMap id="CustomerWithOrderRM" type="com.mybatishello.bean.Customer">

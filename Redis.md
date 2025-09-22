@@ -163,10 +163,132 @@ public class SpringDataRedisTest {
 }
 ```
 
+# 项目使用 Redis（了解）
+## ~~问题说明~~
+![](./pictures/redis/projectProblem.png)
 
+用户端小程序展示的菜品数据都是通过查询数据库获得，如果用户端访问量比较大，数据库访问压力随之增大。
 
+结果：系统响应慢、用户体验差。
 
+## ~~解决思路~~
+![](./pictures/redis/cache.png)
 
+通过Redis来缓存菜品数据，减少数据库查询操作。
 
+缓存逻辑分析（苍穹外卖项目用户端小程序为例）：
+- 每个分类下的菜品保存一份缓存数据
+- 数据库中菜品数据有变更时清理缓存数据
 
+| key | value |
+|--|--|
+| dish_1 | string(...) |
+| dish_2 | string(...) |
+| dish_3 | string(...) |
 
+## ~~实现代码~~
+依据解决思路改造 DishController.java 中的查询菜品方法。加入查询 Redis 逻辑：
+```java
+/**
+ * 根据分类id查询菜品
+ *
+ * @param categoryId
+ * @return
+ */
+@GetMapping("/list")
+@ApiOperation("根据分类id查询菜品")
+public Result<List<DishVO>> list(Long categoryId) {
+    // 构造redis中的key
+    String key = "dish_" + categoryId;
+    // 先从redis中获取数据
+    List<DishVO> dishVOList = (List<DishVO>) redisTemplate.opsForValue().get(key);
+
+    // 如果存在，直接返回，无需查询数据库
+    if (dishVOList != null) {
+        log.info("从Redis中获取数据，key为：{}", key);
+        return Result.success(dishVOList);
+    }
+    // 如果不存在，则查询数据库
+    log.info("从数据库中获取数据，key为：{}", categoryId);
+
+    Dish dish = new Dish();
+    dish.setCategoryId(categoryId);
+    dish.setStatus(StatusConstant.ENABLE);//查询起售中的菜品
+    dishVOList = dishService.listWithFlavor(dish);
+
+    // 将查询结果保存到Redis中
+    redisTemplate.opsForValue().set(key, dishVOList);
+    return Result.success(dishVOList);
+}
+```
+
+# Spring Cache
+## 简介
+Spring Cache 是一个框架，实现了基于注解的缓存功能，只需要简单地加一个注解，就能实现缓存功能。
+
+Spring Cache 提供了一层抽象，底层可以切换不同的缓存实现，例如：
+- EHCache
+- Caffeine
+- Redis
+
+## 引入依赖
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-cache</artifactId>
+</dependency>
+```
+
+## 常用注解
+![](./pictures/redis/springCache.png)
+
+## 项目使用 Spring Cache
+> 注意：使用到的所有实体需要实现序列化接口；
+
+缓存苍穹外卖套餐（setmeal）具体的实现思路如下：
+- 导入Spring Cache和Redis相关maven坐标；
+- 在启动类上加入@EnableCaching注解，开启缓存注解功能；
+- 在用户端接口SetmealController的 list 方法上加入@Cacheable注解；
+- 在管理端接口SetmealController的 save、delete、update、startOrStop等方法上加入CacheEvict注解。
+
+添加缓存示例代码（user/SetmealController.java）：
+> `key = "#categoryId"` 该语句中双引号是 Spring 的 SEL 表达式语言。
+
+```java
+/**
+ * 条件查询
+ * @param categoryId
+ * @return
+ */
+@GetMapping("/list")
+@ApiOperation("根据分类id查询套餐")
+@Cacheable(cacheNames = "setmealCache", key = "#categoryId")
+public Result<List<Setmeal>> list(Long categoryId) {
+    Setmeal setmeal = new Setmeal();
+    setmeal.setCategoryId(categoryId);
+    setmeal.setStatus(StatusConstant.ENABLE);
+
+    List<Setmeal> list = setmealService.list(setmeal);
+    return Result.success(list);
+}
+```
+
+删除缓存示例代码（admin/SetmealController.java）：
+```java
+@PostMapping
+@CacheEvict(cacheNames = "setmealCache", key = "#setmealDTO.categoryId")
+public Result<String> save(@RequestBody SetmealDTO setmealDTO) {
+    log.info("新增套餐");
+    setmealService.saveWithDish(setmealDTO);
+    return Result.success();
+}
+
+@DeleteMapping
+@ApiOperation("套餐批量删除")
+@CacheEvict(cacheNames = "setmealCache", allEntries = true)
+public Result delete(@RequestParam("ids") List<Long> ids) {
+    log.info("套餐批量删除");
+    setmealService.deleteBatch(ids);
+    return Result.success();
+}
+```
