@@ -15,4 +15,4 @@
 | 12. [maven.md](./maven.md) | B 站【尚硅谷】2023 SSM（前 12 集是 maven） |
 | 13. [SSM-SpringMVC.md](./SSM-SpringMVC.md)、[SSM-MyBatis.md](./SSM-MyBatis.md)、[SSM-SpringBoot.md](./SSM-SpringBoot.md) | B 站尚硅谷最新版SSM教程，基于AI的全新ssm框架实战 |
 | 14. [MyBatis-Plus.md](./MyBatis-Plus.md) | B 站【尚硅谷】MyBatisPlus教程（一套玩转mybatis-plus） |
-| 15. [Redis.md](./Redis.md)、[SpringTask.md](./SpringTask.md) | B 站黑马程序员Java项目实战《苍穹外卖》，最适合新手的SpringBoot+SSM的企业级Java项目实战 |
+| 15. [CQ-Redis+SpringCache.md](./CQ-Redis+SpringCache.md)、[CQ-SpringTask+Websocket.md](./CQ-SpringTask+Websocket.md)、[CQ-ApachePOI.md](./CQ-ApachePOI.md) | B 站黑马程序员Java项目实战《苍穹外卖》，最适合新手的SpringBoot+SSM的企业级Java项目实战 |
