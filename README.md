@@ -16,3 +16,4 @@
 | 13. [SSM-SpringMVC.md](./SSM-SpringMVC.md)、[SSM-MyBatis.md](./SSM-MyBatis.md)、[SSM-SpringBoot.md](./SSM-SpringBoot.md) | B 站尚硅谷最新版SSM教程，基于AI的全新ssm框架实战 |
 | 14. [MyBatis-Plus.md](./MyBatis-Plus.md) | B 站【尚硅谷】MyBatisPlus教程（一套玩转mybatis-plus） |
 | 15. [CQ-Redis+SpringCache.md](./CQ-Redis+SpringCache.md)、[CQ-SpringTask+Websocket.md](./CQ-SpringTask+Websocket.md)、[CQ-ApachePOI.md](./CQ-ApachePOI.md) | B 站黑马程序员Java项目实战《苍穹外卖》，最适合新手的SpringBoot+SSM的企业级Java项目实战 |
+| 16. [HMDP-RedisBasic.md](./HMDP-RedisBasic.md) | B 站黑马程序员Redis入门到实战教程，深度透析redis底层原理+redis分布式锁+企业解决方案+黑马点评实战项目 |

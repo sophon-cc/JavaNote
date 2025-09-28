@@ -22,9 +22,9 @@ Redis存储的是key-value结构的数据，其中key是字符串类型，value�
 ## 字符串操作命令
 Redis 字符串类型常用命令：
 ```bash
-SET key value              # 设置指定key的值
-GET key                    # 获取指定key的值
-SETEX key seconds value    # 设置指定key的值，并将 key 的过期时间设为 seconds 秒
+SET key value              # 设置指定 key 的值
+GET key                    # 获取指定 key 的值
+SETEX key seconds value    # 设置指定 key 的值，并将 key 的过期时间设为 seconds 秒
 SETNX key value            # 只有在 key 不存在时设置 key 的值
 ```
 ## 哈希操作命令
@@ -49,6 +49,7 @@ LPUSH key value1 [value2]  # 将一个或多个值插入到列表头部(左边)
 LRANGE key start stop      # 获取列表指定范围内的元素(可以使用 -1 表示 stop)
 RPOP key                   # 移除并获取列表最后一个元素(右边)
 LLEN key                   # 获取列表长度
+BLPOP key timeout          # 移除并获取列表左边一个元素，若不存在元素则阻塞等待 timeout 秒
 ```
 
 ## 集合操作命令
@@ -61,6 +62,7 @@ SMEMBERS key                # 返回集合中的所有成员
 SCARD key                   # 获取集合的成员数
 SINTER key1 [key2]          # 返回给定所有集合的交集
 SUNION key1 [key2]          # 返回所有给定集合的并集
+SDIFF key1 [key2]           # 返回所有给定集合的差集
 SREM key member1 [member2]  # 删除集合中一个或多个成员
 ```
 
@@ -73,15 +75,23 @@ ZADD key score1 member1 [score2 member2]  # 向有序集合添加一个或多个
 ZRANGE key start stop [WITHSCORES]        # 通过索引区间返回有序集合中指定区间内的成员
 ZINCRBY key increment member              # 有序集合中对指定成员的分数加上增量 increment
 ZREM key member [member ...]              # 移除有序集合中的一个或多个成员
+ZRANGEBYSCORE key min max                 # 按照score排序后，获取指定score范围内的元素
+ZDIFF.ZINTER.ZUNION                       # 求差集.交集.并集
+ZSCORE key member                         # 获取sorted set中的指定元素的score值
+ZRANK key member                          # 获取sorted set 中的指定元素的排名
+ZCOUNT key min max                        # 统计score值在给定范围内的所有元素的个数
 ```
 
 ## 通用命令
 Redis的通用命令是不分数据类型的，都可以使用的命令：
 ```bash
+SELECT index                # 选择 Redis 库
 KEYS pattern                # 查找所有符合给定模式( pattern)的 key 
 EXISTS key                  # 检查给定 key 是否存在
 TYPE key                    # 返回 key 所储存的值的类型
 DEL key1 [key2 ...]         # 该命令用于在 key 存在是删除 key
+EXPIRE key seconds          # 给一个key设置有效期，有效期到期时该key会被自动删除
+TTL key                     # 查看一个KEY的剩余有效期
 ```
 
 # 在 Java 中操作 Redis
@@ -95,7 +105,8 @@ Spring Data Redis 是 Spring 的一部分，对 Redis 底层开发包进行了�
 在 Spring 项目中，可以使用Spring Data Redis来简化操作。
 
 ## Spring Data Redis使用方式
-操作步骤：
+环境准备：
+
 1、导入Spring Data Redis 的maven坐标
 ```xml
 <dependency>
@@ -113,24 +124,38 @@ spring:
     password: 123456
 ```
 
-3、编写配置类，创建RedisTemplate对象
+### 方式一：RedisTemplate（了解）
+1、编写配置类，创建RedisTemplate对象
 ```java
 @Configuration
-@Slf4j
-public class RedisConfiguration {
+public class RedisConfig {
+    /**
+     * 创建RedisTemplate对象：设置 Redis 的 key 均为字符串，value 均为对象转换为 JSON
+     * @param connectionFactory
+     * @return
+     */
     @Bean
-    public RedisTemplate redisTemplate(RedisConnectionFactory redisConnectionFactory){
-        log.info("开始创建redis模板类...");
-        RedisTemplate redisTemplate = new RedisTemplate();
-        // 设置Key的序列化器，默认为JdkSerializationRedisSerializer
-        redisTemplate.setKeySerializer(new StringRedisSerializer());
-        redisTemplate.setConnectionFactory(redisConnectionFactory);
-        return redisTemplate;
+    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory){
+        // 创建RedisTemplate对象
+        RedisTemplate<String, Object> template = new RedisTemplate<>();
+        // 设置连接工厂
+        template.setConnectionFactory(connectionFactory);
+        // 创建JSON序列化工具
+        GenericJackson2JsonRedisSerializer jsonRedisSerializer = 
+            new GenericJackson2JsonRedisSerializer();
+        // 设置Key的序列化
+        template.setKeySerializer(RedisSerializer.string());
+        template.setHashKeySerializer(RedisSerializer.string());
+        // 设置Value的序列化
+        template.setValueSerializer(jsonRedisSerializer);
+        template.setHashValueSerializer(jsonRedisSerializer);
+        // 返回
+        return template;
     }
 }
 ```
 
-4、通过RedisTemplate对象操作Redis
+2、通过RedisTemplate对象操作Redis
 RedisTemplate 针对大量api进行了归类封装,将同一数据类型的操作封装为对应的Operation接口，具体分类如下：
 - ValueOperations：string数据操作
 - SetOperations：set类型数据操作
@@ -162,6 +187,44 @@ public class SpringDataRedisTest {
     }
 }
 ```
+
+### 方式二：StringRedisTemplate
+尽管JSON的序列化方式可以满足我们的需求，但依然存在一些问题。为了在反序列化时知道对象的类型，JSON序列化器会将类的class类型写入json结果中，存入Redis带来额外的内存开销。
+
+为了减少内存的消耗，我们可以采用手动序列化的方式，换句话说，就是不借助默认的序列化器，而是我们自己来控制序列化的动作，同时，我们只采用String的序列化器，这样，在存储value时，我们就不需要在内存中就不用多存储数据。
+
+这种用法比较普遍，因此SpringDataRedis就提供了RedisTemplate的子类：StringRedisTemplate，它的key和value的序列化方式默认就是String方式。
+
+省去了我们自定义RedisTemplate的序列化方式的步骤，而是直接使用：
+
+```java
+@SpringBootTest
+class RedisStringTests {
+
+    @Autowired
+    private StringRedisTemplate stringRedisTemplate;
+
+    private static final ObjectMapper mapper = new ObjectMapper();
+
+    @Test
+    void test() throws JsonProcessingException {
+        // 创建对象
+        User user = new User("虎哥", 21);
+        // 手动序列化
+        String json = mapper.writeValueAsString(user);
+        // 写入数据
+        stringRedisTemplate.opsForValue().set("user:200", json);
+
+        // 获取数据
+        String jsonUser = stringRedisTemplate.opsForValue().get("user:200");
+        // 手动反序列化
+        User user1 = mapper.readValue(jsonUser, User.class);
+        System.out.println("user1 = " + user1);
+    }
+}
+```
+
+> 由于未使用任何序列化组件也省去了编写 Redis 配置类。
 
 # 项目使用 Redis（了解）
 ## ~~问题说明~~
