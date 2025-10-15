@@ -1,6 +1,6 @@
 # 实战篇Redis
 
-## 开篇导读
+## 1、开篇导读
 
 亲爱的小伙伴们大家好，马上咱们就开始实战篇的内容了，相信通过本章的学习，小伙伴们就能理解各种redis的使用啦，接下来咱们来一起看看实战篇我们要学习一些什么样的内容
 
@@ -32,420 +32,13 @@
 
 基于Set集合的关注、取消关注，共同关注等等功能，这一块知识咱们之前就讲过，这次我们在项目中来使用一下
 
-* 打人探店
+* 达人探店
 
 基于List来完成点赞列表的操作，同时基于SortedSet来完成点赞的排行榜功能
 
 以上这些内容咱们统统都会给小伙伴们讲解清楚，让大家充分理解如何使用Redis
 
-
-
 ![1653056228879](./pictures/HMDP/practice/1653056228879.png)
-
-## 1、短信登录
-
-### 1.1、导入黑马点评项目
-
-#### 1.1.1 、导入SQL
-
-![1653057872536](./pictures/HMDP/practice/1653057872536.png)
-
-#### 1.1.2、有关当前模型
-
-手机或者app端发起请求，请求我们的nginx服务器，nginx基于七层模型走的事HTTP协议，可以实现基于Lua直接绕开tomcat访问redis，也可以作为静态资源服务器，轻松扛下上万并发， 负载均衡到下游tomcat服务器，打散流量，我们都知道一台4核8G的tomcat，在优化和处理简单业务的加持下，大不了就处理1000左右的并发， 经过nginx的负载均衡分流后，利用集群支撑起整个项目，同时nginx在部署了前端项目后，更是可以做到动静分离，进一步降低tomcat服务的压力，这些功能都得靠nginx起作用，所以nginx是整个项目中重要的一环。
-
-在tomcat支撑起并发流量后，我们如果让tomcat直接去访问Mysql，根据经验Mysql企业级服务器只要上点并发，一般是16或32 核心cpu，32 或64G内存，像企业级mysql加上固态硬盘能够支撑的并发，大概就是4000起~7000左右，上万并发， 瞬间就会让Mysql服务器的cpu，硬盘全部打满，容易崩溃，所以我们在高并发场景下，会选择使用mysql集群，同时为了进一步降低Mysql的压力，同时增加访问的性能，我们也会加入Redis，同时使用Redis集群使得Redis对外提供更好的服务。
-
-![1653059409865](./pictures/HMDP/practice/1653059409865.png)
-
-#### 1.1.3、导入后端项目
-
-在资料中提供了一个项目源码：
-
-![1653060237073](./pictures/HMDP/practice/1653060237073.png)
-
-#### 1.1.4、导入前端工程
-
-![1653060337562](./pictures/HMDP/practice/1653060337562.png)
-
-#### 1.1.5 运行前端项目
-
-![1653060588190](./pictures/HMDP/practice/1653060588190.png)
-
-### 1.2 、基于Session实现登录流程
-
-**发送验证码：**
-
-用户在提交手机号后，会校验手机号是否合法，如果不合法，则要求用户重新输入手机号
-
-如果手机号合法，后台此时生成对应的验证码，同时将验证码进行保存，然后再通过短信的方式将验证码发送给用户
-
-**短信验证码登录、注册：**
-
-用户将验证码和手机号进行输入，后台从session中拿到当前验证码，然后和用户输入的验证码进行校验，如果不一致，则无法通过校验，如果一致，则后台根据手机号查询用户，如果用户不存在，则为用户创建账号信息，保存到数据库，无论是否存在，都会将用户信息保存到session中，方便后续获得当前登录信息
-
-**校验登录状态:**
-
-用户在请求时候，会从cookie中携带者JsessionId到后台，后台通过JsessionId从session中拿到用户信息，如果没有session信息，则进行拦截，如果有session信息，则将用户信息保存到threadLocal中，并且放行
-
-
-
-![1653066208144](./pictures/HMDP/practice/1653066208144.png)
-
-### 1.3 、实现发送短信验证码功能
-
-**页面流程**
-
-![1653067054461](./pictures/HMDP/practice/1653067054461.png)
-
-**具体代码如下**
-
-**贴心小提示：**
-
-具体逻辑上文已经分析，我们仅仅只需要按照提示的逻辑写出代码即可。
-
-* 发送验证码
-
-```java
-    @Override
-    public Result sendCode(String phone, HttpSession session) {
-        // 1.校验手机号
-        if (RegexUtils.isPhoneInvalid(phone)) {
-            // 2.如果不符合，返回错误信息
-            return Result.fail("手机号格式错误！");
-        }
-        // 3.符合，生成验证码
-        String code = RandomUtil.randomNumbers(6);
-
-        // 4.保存验证码到 session
-        session.setAttribute("code",code);
-        // 5.发送验证码
-        log.debug("发送短信验证码成功，验证码：{}", code);
-        // 返回ok
-        return Result.ok();
-    }
-```
-
-* 登录
-
-```java
-    @Override
-    public Result login(LoginFormDTO loginForm, HttpSession session) {
-        // 1.校验手机号
-        String phone = loginForm.getPhone();
-        if (RegexUtils.isPhoneInvalid(phone)) {
-            // 2.如果不符合，返回错误信息
-            return Result.fail("手机号格式错误！");
-        }
-        // 3.校验验证码
-        Object cacheCode = session.getAttribute("code");
-        String code = loginForm.getCode();
-        if(cacheCode == null || !cacheCode.toString().equals(code)){
-             //3.不一致，报错
-            return Result.fail("验证码错误");
-        }
-        //一致，根据手机号查询用户
-        User user = query().eq("phone", phone).one();
-
-        //5.判断用户是否存在
-        if(user == null){
-            //不存在，则创建
-            user =  createUserWithPhone(phone);
-        }
-        //7.保存用户信息到session中
-        session.setAttribute("user",user);
-
-        return Result.ok();
-    }
-```
-
-### 1.4、实现登录拦截功能
-
-**温馨小贴士：tomcat的运行原理**
-
-![1653068196656](./pictures/HMDP/practice/1653068196656.png)
-
-当用户发起请求时，会访问我们像tomcat注册的端口，任何程序想要运行，都需要有一个线程对当前端口号进行监听，tomcat也不例外，当监听线程知道用户想要和tomcat连接连接时，那会由监听线程创建socket连接，socket都是成对出现的，用户通过socket像互相传递数据，当tomcat端的socket接受到数据后，此时监听线程会从tomcat的线程池中取出一个线程执行用户请求，在我们的服务部署到tomcat后，线程会找到用户想要访问的工程，然后用这个线程转发到工程中的controller，service，dao中，并且访问对应的DB，在用户执行完请求后，再统一返回，再找到tomcat端的socket，再将数据写回到用户端的socket，完成请求和响应
-
-通过以上讲解，我们可以得知 每个用户其实对应都是去找tomcat线程池中的一个线程来完成工作的， 使用完成后再进行回收，既然每个请求都是独立的，所以在每个用户去访问我们的工程时，我们可以使用threadlocal来做到线程隔离，每个线程操作自己的一份数据
-
-
-
-**温馨小贴士：关于threadlocal**
-
-如果小伙伴们看过threadLocal的源码，你会发现在threadLocal中，无论是他的put方法和他的get方法， 都是先从获得当前用户的线程，然后从线程中取出线程的成员变量map，只要线程不一样，map就不一样，所以可以通过这种方式来做到线程隔离
-
-
-
-![1653068874258](./pictures/HMDP/practice/1653068874258.png)
-
-拦截器代码
-
-```Java
-public class LoginInterceptor implements HandlerInterceptor {
-
-    @Override
-    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
-       //1.获取session
-        HttpSession session = request.getSession();
-        //2.获取session中的用户
-        Object user = session.getAttribute("user");
-        //3.判断用户是否存在
-        if(user == null){
-              //4.不存在，拦截，返回401状态码
-              response.setStatus(401);
-              return false;
-        }
-        //5.存在，保存用户信息到Threadlocal
-        UserHolder.saveUser((User)user);
-        //6.放行
-        return true;
-    }
-}
-```
-
-让拦截器生效
-
-```java
-@Configuration
-public class MvcConfig implements WebMvcConfigurer {
-
-    @Resource
-    private StringRedisTemplate stringRedisTemplate;
-
-    @Override
-    public void addInterceptors(InterceptorRegistry registry) {
-        // 登录拦截器
-        registry.addInterceptor(new LoginInterceptor())
-                .excludePathPatterns(
-                        "/shop/**",
-                        "/voucher/**",
-                        "/shop-type/**",
-                        "/upload/**",
-                        "/blog/hot",
-                        "/user/code",
-                        "/user/login"
-                ).order(1);
-        // token刷新的拦截器
-        registry.addInterceptor(new RefreshTokenInterceptor(stringRedisTemplate)).addPathPatterns("/**").order(0);
-    }
-}
-```
-
-### 1.5、隐藏用户敏感信息
-
-我们通过浏览器观察到此时用户的全部信息都在，这样极为不靠谱，所以我们应当在返回用户信息之前，将用户的敏感信息进行隐藏，采用的核心思路就是书写一个UserDto对象，这个UserDto对象就没有敏感信息了，我们在返回前，将有用户敏感信息的User对象转化成没有敏感信息的UserDto对象，那么就能够避免这个尴尬的问题了
-
-**在登录方法处修改**
-
-```java
-//7.保存用户信息到session中
-session.setAttribute("user", BeanUtils.copyProperties(user,UserDTO.class));
-```
-
-**在拦截器处：**
-
-```java
-//5.存在，保存用户信息到Threadlocal
-UserHolder.saveUser((UserDTO) user);
-```
-
-**在UserHolder处：将user对象换成UserDTO**
-
-```java
-public class UserHolder {
-    private static final ThreadLocal<UserDTO> tl = new ThreadLocal<>();
-
-    public static void saveUser(UserDTO user){
-        tl.set(user);
-    }
-
-    public static UserDTO getUser(){
-        return tl.get();
-    }
-
-    public static void removeUser(){
-        tl.remove();
-    }
-}
-```
-
-### 1.6、session共享问题
-
-**核心思路分析：**
-
-每个tomcat中都有一份属于自己的session,假设用户第一次访问第一台tomcat，并且把自己的信息存放到第一台服务器的session中，但是第二次这个用户访问到了第二台tomcat，那么在第二台服务器上，肯定没有第一台服务器存放的session，所以此时 整个登录拦截功能就会出现问题，我们能如何解决这个问题呢？早期的方案是session拷贝，就是说虽然每个tomcat上都有不同的session，但是每当任意一台服务器的session修改时，都会同步给其他的Tomcat服务器的session，这样的话，就可以实现session的共享了
-
-但是这种方案具有两个大问题
-
-1、每台服务器中都有完整的一份session数据，服务器压力过大。
-
-2、session拷贝数据时，可能会出现延迟
-
-所以咱们后来采用的方案都是基于redis来完成，我们把session换成redis，redis数据本身就是共享的，就可以避免session共享的问题了
-
-![1653069893050](./pictures/HMDP/practice/1653069893050.png)
-
-### 1.7 Redis代替session的业务流程
-
-#### 1.7.1、设计key的结构
-
-首先我们要思考一下利用redis来存储数据，那么到底使用哪种结构呢？由于存入的数据比较简单，我们可以考虑使用String，或者是使用哈希，如下图，如果使用String，同学们注意他的value，用多占用一点空间，如果使用哈希，则他的value中只会存储他数据本身，如果不是特别在意内存，其实使用String就可以啦。
-
-![1653319261433](./pictures/HMDP/practice/1653319261433.png)
-
-#### 1.7.2、设计key的具体细节
-
-所以我们可以使用String结构，就是一个简单的key，value键值对的方式，但是关于key的处理，session他是每个用户都有自己的session，但是redis的key是共享的，咱们就不能使用code了
-
-在设计这个key的时候，我们之前讲过需要满足两点
-
-1、key要具有唯一性
-
-2、key要方便携带
-
-如果我们采用phone：手机号这个的数据来存储当然是可以的，但是如果把这样的敏感数据存储到redis中并且从页面中带过来毕竟不太合适，所以我们在后台生成一个随机串token，然后让前端带来这个token就能完成我们的整体逻辑了
-
-#### 1.7.3、整体访问流程
-
-当注册完成后，用户去登录会去校验用户提交的手机号和验证码，是否一致，如果一致，则根据手机号查询用户信息，不存在则新建，最后将用户数据保存到redis，并且生成token作为redis的key，当我们校验用户是否登录时，会去携带着token进行访问，从redis中取出token对应的value，判断是否存在这个数据，如果没有则拦截，如果存在则将其保存到threadLocal中，并且放行。
-
-![1653319474181](./pictures/HMDP/practice/1653319474181.png)
-
-
-
-### 1.8 基于Redis实现短信登录
-
-这里具体逻辑就不分析了，之前咱们已经重点分析过这个逻辑啦。
-
-**UserServiceImpl代码**
-
-```java
-@Override
-public Result login(LoginFormDTO loginForm, HttpSession session) {
-    // 1.校验手机号
-    String phone = loginForm.getPhone();
-    if (RegexUtils.isPhoneInvalid(phone)) {
-        // 2.如果不符合，返回错误信息
-        return Result.fail("手机号格式错误！");
-    }
-    // 3.从redis获取验证码并校验
-    String cacheCode = stringRedisTemplate.opsForValue().get(LOGIN_CODE_KEY + phone);
-    String code = loginForm.getCode();
-    if (cacheCode == null || !cacheCode.equals(code)) {
-        // 不一致，报错
-        return Result.fail("验证码错误");
-    }
-
-    // 4.一致，根据手机号查询用户 select * from tb_user where phone = ?
-    User user = query().eq("phone", phone).one();
-
-    // 5.判断用户是否存在
-    if (user == null) {
-        // 6.不存在，创建新用户并保存
-        user = createUserWithPhone(phone);
-    }
-
-    // 7.保存用户信息到 redis中
-    // 7.1.随机生成token，作为登录令牌
-    String token = UUID.randomUUID().toString(true);
-    // 7.2.将User对象转为HashMap存储
-    UserDTO userDTO = BeanUtil.copyProperties(user, UserDTO.class);
-    Map<String, Object> userMap = BeanUtil.beanToMap(userDTO, new HashMap<>(),
-            CopyOptions.create()
-                    .setIgnoreNullValue(true)
-                    .setFieldValueEditor((fieldName, fieldValue) -> fieldValue.toString()));
-    // 7.3.存储
-    String tokenKey = LOGIN_USER_KEY + token;
-    stringRedisTemplate.opsForHash().putAll(tokenKey, userMap);
-    // 7.4.设置token有效期
-    stringRedisTemplate.expire(tokenKey, LOGIN_USER_TTL, TimeUnit.MINUTES);
-
-    // 8.返回token
-    return Result.ok(token);
-}
-```
-
-### 1.9 解决状态登录刷新问题
-
-#### 1.9.1 初始方案思路总结：
-
-在这个方案中，他确实可以使用对应路径的拦截，同时刷新登录token令牌的存活时间，但是现在这个拦截器他只是拦截需要被拦截的路径，假设当前用户访问了一些不需要拦截的路径，那么这个拦截器就不会生效，所以此时令牌刷新的动作实际上就不会执行，所以这个方案他是存在问题的
-
-![1653320822964](./pictures/HMDP/practice/1653320822964.png)
-
-####  1.9.2 优化方案
-
-既然之前的拦截器无法对不需要拦截的路径生效，那么我们可以添加一个拦截器，在第一个拦截器中拦截所有的路径，把第二个拦截器做的事情放入到第一个拦截器中，同时刷新令牌，因为第一个拦截器有了threadLocal的数据，所以此时第二个拦截器只需要判断拦截器中的user对象是否存在即可，完成整体刷新功能。
-
-![1653320764547](./pictures/HMDP/practice/1653320764547.png)
-
-#### 1.9.3 代码 
-
-**RefreshTokenInterceptor**
-
-```java
-public class RefreshTokenInterceptor implements HandlerInterceptor {
-
-    private StringRedisTemplate stringRedisTemplate;
-
-    public RefreshTokenInterceptor(StringRedisTemplate stringRedisTemplate) {
-        this.stringRedisTemplate = stringRedisTemplate;
-    }
-
-    @Override
-    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
-        // 1.获取请求头中的token
-        String token = request.getHeader("authorization");
-        if (StrUtil.isBlank(token)) {
-            return true;
-        }
-        // 2.基于TOKEN获取redis中的用户
-        String key  = LOGIN_USER_KEY + token;
-        Map<Object, Object> userMap = stringRedisTemplate.opsForHash().entries(key);
-        // 3.判断用户是否存在
-        if (userMap.isEmpty()) {
-            return true;
-        }
-        // 5.将查询到的hash数据转为UserDTO
-        UserDTO userDTO = BeanUtil.fillBeanWithMap(userMap, new UserDTO(), false);
-        // 6.存在，保存用户信息到 ThreadLocal
-        UserHolder.saveUser(userDTO);
-        // 7.刷新token有效期
-        stringRedisTemplate.expire(key, LOGIN_USER_TTL, TimeUnit.MINUTES);
-        // 8.放行
-        return true;
-    }
-
-    @Override
-    public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) throws Exception {
-        // 移除用户
-        UserHolder.removeUser();
-    }
-}
-    
-```
-
-**LoginInterceptor**
-
-```java
-public class LoginInterceptor implements HandlerInterceptor {
-
-    @Override
-    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
-        // 1.判断是否需要拦截（ThreadLocal中是否有用户）
-        if (UserHolder.getUser() == null) {
-            // 没有，需要拦截，设置状态码
-            response.setStatus(401);
-            // 拦截
-            return false;
-        }
-        // 有用户，则放行
-        return true;
-    }
-}
-```
-
 
 
 ## 2、商户查询缓存
@@ -492,18 +85,13 @@ public class LoginInterceptor implements HandlerInterceptor {
 
 **浏览器缓存**：主要是存在于浏览器端的缓存
 
-**应用层缓存：**可以分为tomcat本地缓存，比如之前提到的map，或者是使用redis作为缓存
+**应用层缓存：** 可以分为tomcat本地缓存，比如之前提到的map，或者是使用redis作为缓存
 
-**数据库缓存：**在数据库中有一片空间是 buffer pool，增改查数据都会先加载到mysql的缓存中
+**数据库缓存：** 在数据库中有一片空间是 buffer pool，增改查数据都会先加载到mysql的缓存中
 
-**CPU缓存：**当代计算机最大的问题是 cpu性能提升了，但内存读写速度没有跟上，所以为了适应当下的情况，增加了cpu的L1，L2，L3级的缓存
+**CPU缓存：** 当代计算机最大的问题是 cpu性能提升了，但内存读写速度没有跟上，所以为了适应当下的情况，增加了cpu的L1，L2，L3级的缓存
 
 ![](./pictures/HMDP/practice/image-20220523212915666.png)
-
-
-
-
-
 
 
 ### 2.2 添加商户缓存
@@ -530,17 +118,15 @@ public Result queryShopById(@PathVariable("id") Long id) {
 
 ![1653322190155](./pictures/HMDP/practice/1653322190155.png)
 
-
-
 ### 2.3 缓存更新策略
 
 缓存更新是redis为了节约内存而设计出来的一个东西，主要是因为内存数据宝贵，当我们向redis插入太多数据，此时就可能会导致缓存中的数据过多，所以redis会对部分数据进行更新，或者把他叫为淘汰更合适。
 
-**内存淘汰：**redis自动进行，当redis内存达到咱们设定的max-memery的时候，会自动触发淘汰机制，淘汰掉一些不重要的数据(可以自己设置策略方式)
+**内存淘汰：** redis自动进行，当redis内存达到咱们设定的max-memery的时候，会自动触发淘汰机制，淘汰掉一些不重要的数据(可以自己设置策略方式)
 
-**超时剔除：**当我们给redis设置了过期时间ttl之后，redis会将超时的数据进行删除，方便咱们继续使用缓存
+**超时剔除：** 当我们给redis设置了过期时间ttl之后，redis会将超时的数据进行删除，方便咱们继续使用缓存
 
-**主动更新：**我们可以手动调用方法把缓存删掉，通常用于解决缓存和数据库不一致问题
+**主动更新：** 我们可以手动调用方法把缓存删掉，通常用于解决缓存和数据库不一致问题
 
 ![1653322506393](./pictures/HMDP/practice/1653322506393.png)
 
@@ -627,20 +213,15 @@ Write Behind Caching Pattern ：调用者只操作缓存，其他线程去异步
     * 实现复杂
     * 存在误判可能
 
+**缓存空对象思路分析：** 当我们客户端访问不存在的数据时，先请求redis，但是此时redis中没有数据，此时会访问到数据库，但是数据库中也没有数据，这个数据穿透了缓存，直击数据库，我们都知道数据库能够承载的并发不如redis这么高，如果大量的请求同时过来访问这种不存在的数据，这些请求就都会访问到数据库，简单的解决方案就是哪怕这个数据在数据库中也不存在，我们也把这个数据存入到redis中去，这样，下次用户过来访问这个不存在的数据，那么在redis中也能找到这个数据就不会进入到缓存了
 
-
-**缓存空对象思路分析：**当我们客户端访问不存在的数据时，先请求redis，但是此时redis中没有数据，此时会访问到数据库，但是数据库中也没有数据，这个数据穿透了缓存，直击数据库，我们都知道数据库能够承载的并发不如redis这么高，如果大量的请求同时过来访问这种不存在的数据，这些请求就都会访问到数据库，简单的解决方案就是哪怕这个数据在数据库中也不存在，我们也把这个数据存入到redis中去，这样，下次用户过来访问这个不存在的数据，那么在redis中也能找到这个数据就不会进入到缓存了
-
-
-
-**布隆过滤：**布隆过滤器其实采用的是哈希思想来解决这个问题，通过一个庞大的二进制数组，走哈希思想去判断当前这个要查询的这个数据是否存在，如果布隆过滤器判断存在，则放行，这个请求会去访问redis，哪怕此时redis中的数据过期了，但是数据库中一定存在这个数据，在数据库中查询出来这个数据后，再将其放入到redis中，
+**布隆过滤：** 布隆过滤器其实采用的是哈希思想来解决这个问题，通过一个庞大的二进制数组，走哈希思想去判断当前这个要查询的这个数据是否存在，如果布隆过滤器判断存在，则放行，这个请求会去访问redis，哪怕此时redis中的数据过期了，但是数据库中一定存在这个数据，在数据库中查询出来这个数据后，再将其放入到redis中，
 
 假设布隆过滤器判断这个数据不存在，则直接返回
 
 这种方式优点在于节约内存空间，存在误判，误判原因在于：布隆过滤器走的是哈希思想，只要哈希思想，就可能存在哈希冲突
 
 ![1653326156516](./pictures/HMDP/practice/1653326156516.png)
-
 
 
 ### 2.6 编码解决商品查询的缓存穿透问题：
@@ -670,8 +251,6 @@ Write Behind Caching Pattern ：调用者只操作缓存，其他线程去异步
 * 加强用户权限校验
 * 做好热点参数的限流
 
-
-
 ### 2.7 缓存雪崩问题及解决思路
 
 缓存雪崩是指在同一时段大量的缓存key同时失效或者Redis服务宕机，导致大量请求到达数据库，带来巨大压力。
@@ -696,11 +275,7 @@ Write Behind Caching Pattern ：调用者只操作缓存，其他线程去异步
 
 逻辑分析：假设线程1在查询缓存之后，本来应该去查询数据库，然后把这个数据重新加载到缓存的，此时只要线程1走完这个逻辑，其他线程就都能从缓存中加载这些数据了，但是假设在线程1没有走完的时候，后续的线程2，线程3，线程4同时过来访问当前这个方法， 那么这些线程都不能从缓存中查询到数据，那么他们就会同一时刻来访问查询缓存，都没查到，接着同一时间去访问数据库，同时的去执行数据库代码，对数据库访问压力过大
 
-
-
 ![1653328022622](./pictures/HMDP/practice/1653328022622.png)
-
-
 
 解决方案一、使用锁来解决：
 
@@ -722,7 +297,7 @@ Write Behind Caching Pattern ：调用者只操作缓存，其他线程去异步
 
 进行对比
 
-**互斥锁方案：**由于保证了互斥性，所以数据一致，且实现简单，因为仅仅只需要加一把锁而已，也没其他的事情需要操心，所以没有额外的内存消耗，缺点在于有锁就有死锁问题的发生，且只能串行执行性能肯定受到影响
+**互斥锁方案：** 由于保证了互斥性，所以数据一致，且实现简单，因为仅仅只需要加一把锁而已，也没其他的事情需要操心，所以没有额外的内存消耗，缺点在于有锁就有死锁问题的发生，且只能串行执行性能肯定受到影响
 
 **逻辑过期方案：** 线程读取过程中不需要等待，性能好，有一个额外的线程持有锁去进行重构数据，但是在重构数据完成前，其他的线程只能返回之前的数据，且实现起来麻烦
 
@@ -765,8 +340,7 @@ private void unlock(String key) {
             return JSONUtil.toBean(shopJson, Shop.class);
         }
         //判断命中的值是否是空值
-        if (shopJson != null) {
-            //返回一个错误信息
+        if("".equals(shopJson)) {
             return null;
         }
         // 4.实现缓存重构
@@ -782,6 +356,16 @@ private void unlock(String key) {
                 return queryWithMutex(id);
             }
             //4.4 成功，根据id查询数据库
+            // 4.4.1 Double Check
+            shopJson = stringRedisTemplate.opsForValue().get(key);
+            if (StrUtil.isNotBlank(json)) {
+                return JSONUtil.toBean(json, Shop.class);
+            }
+            // 判断命中的是否是空值
+            if("".equals(shopJson)) {
+                return null;
+            }
+
              shop = getById(id);
             // 5.不存在，返回错误
             if(shop == null){
@@ -811,8 +395,6 @@ private void unlock(String key) {
 思路分析：当用户开始查询redis时，判断是否命中，如果没有命中则直接返回空数据，不查询数据库，而一旦命中后，将value取出，判断value中的过期时间是否满足，如果没有过期，则直接返回redis中的数据，如果过期，则在开启独立线程后直接返回之前的数据，独立线程去重构数据，重构完成后释放互斥锁。
 
 ![1653360308731](./pictures/HMDP/practice/1653360308731.png)
-
-
 
 如果封装数据：因为现在redis中存储的数据的value需要带上过期时间，此时要么你去修改原来的实体类，要么你
 
@@ -869,11 +451,17 @@ public Shop queryWithLogicalExpire( Long id ) {
     boolean isLock = tryLock(lockKey);
     // 6.2.判断是否获取锁成功
     if (isLock){
-        CACHE_REBUILD_EXECUTOR.submit( ()->{
+        // 再次判断redis缓存是否过期 Double check
+        json = stringRedisTemplate.opsForValue().get(key);
+        redisData = JSONUtil.toBean(json, RedisData.class);
+        if (redisData.getExpireTime().isAfter(LocalDateTime.now())) {
+            return JSONUtil.toBean((JSONObject) redisData.getData(), , Shop.class);
+        }
 
+        CACHE_REBUILD_EXECUTOR.submit( ()->{
             try{
                 //重建缓存
-                this.saveShop2Redis(id,20L);
+                this.saveShop2Redis(id, 20L);
             }catch (Exception e){
                 throw new RuntimeException(e);
             }finally {
@@ -901,158 +489,214 @@ public Shop queryWithLogicalExpire( Long id ) {
 将逻辑进行封装
 
 ```java
-@Slf4j
 @Component
 public class CacheClient {
-
-    private final StringRedisTemplate stringRedisTemplate;
-
+    @Autowired
+    private StringRedisTemplate stringRedisTemplate;
+    // 缓存重建线程池
     private static final ExecutorService CACHE_REBUILD_EXECUTOR = Executors.newFixedThreadPool(10);
 
-    public CacheClient(StringRedisTemplate stringRedisTemplate) {
-        this.stringRedisTemplate = stringRedisTemplate;
-    }
-
+    /**
+     * 缓存数据
+     * @param key
+     * @param value
+     * @param time
+     * @param unit
+     */
     public void set(String key, Object value, Long time, TimeUnit unit) {
         stringRedisTemplate.opsForValue().set(key, JSONUtil.toJsonStr(value), time, unit);
     }
 
+    /**
+     * 逻辑过期缓存数据
+     * @param key
+     * @param value
+     * @param time
+     * @param unit
+     */
     public void setWithLogicalExpire(String key, Object value, Long time, TimeUnit unit) {
-        // 设置逻辑过期
+        // 封装逻辑过期时间
         RedisData redisData = new RedisData();
         redisData.setData(value);
         redisData.setExpireTime(LocalDateTime.now().plusSeconds(unit.toSeconds(time)));
-        // 写入Redis
+        // 写入redis
         stringRedisTemplate.opsForValue().set(key, JSONUtil.toJsonStr(redisData));
     }
 
-    public <R,ID> R queryWithPassThrough(
-            String keyPrefix, ID id, Class<R> type, Function<ID, R> dbFallback, Long time, TimeUnit unit){
-        String key = keyPrefix + id;
+    /**
+     * 存空字符串解决缓存穿透
+     * @param cachePrefix 缓存前缀
+     * @param id id
+     * @param type 返回类型
+     * @param dbFallback 数据库查询方法
+     * @param time 缓存时间
+     * @param unit 时间单位
+     * @return <R>
+     */
+    public <R, ID> R queryWithPassThrough(String cachePrefix, ID id, Class<R> type, Function<ID, R> dbFallback, Long time, TimeUnit unit) {
+        String key = cachePrefix + id;
         // 1.从redis查询商铺缓存
         String json = stringRedisTemplate.opsForValue().get(key);
         // 2.判断是否存在
         if (StrUtil.isNotBlank(json)) {
-            // 3.存在，直接返回
             return JSONUtil.toBean(json, type);
         }
         // 判断命中的是否是空值
-        if (json != null) {
-            // 返回一个错误信息
+        if("".equals(json)) {
             return null;
         }
 
-        // 4.不存在，根据id查询数据库
+        // 3.不存在，根据id查询数据库
         R r = dbFallback.apply(id);
-        // 5.不存在，返回错误
         if (r == null) {
-            // 将空值写入redis
-            stringRedisTemplate.opsForValue().set(key, "", CACHE_NULL_TTL, TimeUnit.MINUTES);
-            // 返回错误信息
+            // Redis 写入空值，解决缓存穿透
+            this.set(key, "", RedisConstants.CACHE_NULL_TTL, TimeUnit.MINUTES);
             return null;
         }
-        // 6.存在，写入redis
+        // 4.存在，写入redis
         this.set(key, r, time, unit);
         return r;
     }
 
-    public <R, ID> R queryWithLogicalExpire(
-            String keyPrefix, ID id, Class<R> type, Function<ID, R> dbFallback, Long time, TimeUnit unit) {
-        String key = keyPrefix + id;
-        // 1.从redis查询商铺缓存
-        String json = stringRedisTemplate.opsForValue().get(key);
+    /**
+     * 逻辑过期解决缓存击穿
+     * @param cachePrefix 缓存前缀
+     * @param lockPrefix 锁前缀
+     * @param lockTtl 锁过期时间
+     * @param id id
+     * @param type 返回类型
+     * @param dbFallback 数据库查询方法
+     * @param time 缓存时间
+     * @param unit 时间单位
+     * @return <R>
+     */
+    public  <R, ID> R queryWithLogicalExpire(String cachePrefix, String lockPrefix, Long lockTtl, ID id, Class<R> type, Function<ID, R> dbFallback, Long time, TimeUnit unit) {
+        String key = cachePrefix + id;
+        // 1.从redis查询缓存
+        String redisDataJson = stringRedisTemplate.opsForValue().get(key);
         // 2.判断是否存在
-        if (StrUtil.isBlank(json)) {
-            // 3.存在，直接返回
+        if (StrUtil.isBlank(redisDataJson)) {
             return null;
         }
-        // 4.命中，需要先把json反序列化为对象
-        RedisData redisData = JSONUtil.toBean(json, RedisData.class);
+        RedisData redisData = JSONUtil.toBean(redisDataJson, RedisData.class);
         R r = JSONUtil.toBean((JSONObject) redisData.getData(), type);
-        LocalDateTime expireTime = redisData.getExpireTime();
-        // 5.判断是否过期
-        if(expireTime.isAfter(LocalDateTime.now())) {
-            // 5.1.未过期，直接返回店铺信息
+        // 3.命中，判断是否过期
+        // 3.1.未过期，直接返回
+        if (redisData.getExpireTime().isAfter(LocalDateTime.now())) {
             return r;
         }
-        // 5.2.已过期，需要缓存重建
-        // 6.缓存重建
-        // 6.1.获取互斥锁
-        String lockKey = LOCK_SHOP_KEY + id;
-        boolean isLock = tryLock(lockKey);
-        // 6.2.判断是否获取锁成功
-        if (isLock){
-            // 6.3.成功，开启独立线程，实现缓存重建
+        // 3.2.已过期，需要缓存重建
+        // 获取互斥锁
+        String lockKey = lockPrefix + id;
+        boolean isLock = tryLock(lockKey, lockTtl);
+        // 获取锁成功，根据id查询数据库
+        if (isLock) {
+            // 再次判断redis缓存是否过期 Double check
+            redisDataJson = stringRedisTemplate.opsForValue().get(key);
+            redisData = JSONUtil.toBean(redisDataJson, RedisData.class);
+            if (redisData.getExpireTime().isAfter(LocalDateTime.now())) {
+                return JSONUtil.toBean((JSONObject) redisData.getData(), type);
+            }
+
+            // 开启独立线程，实现缓存重建
             CACHE_REBUILD_EXECUTOR.submit(() -> {
+                // 缓存重建
+                // 查数据库
+                R rRebuild = null;
                 try {
-                    // 查询数据库
-                    R newR = dbFallback.apply(id);
-                    // 重建缓存
-                    this.setWithLogicalExpire(key, newR, time, unit);
+                    rRebuild = dbFallback.apply(id);
+                    // 写入redis
+                    this.setWithLogicalExpire(key, rRebuild, time,  unit);
                 } catch (Exception e) {
                     throw new RuntimeException(e);
-                }finally {
+                } finally {
                     // 释放锁
                     unlock(lockKey);
                 }
             });
         }
-        // 6.4.返回过期的商铺信息
         return r;
     }
 
-    public <R, ID> R queryWithMutex(
-            String keyPrefix, ID id, Class<R> type, Function<ID, R> dbFallback, Long time, TimeUnit unit) {
-        String key = keyPrefix + id;
-        // 1.从redis查询商铺缓存
-        String shopJson = stringRedisTemplate.opsForValue().get(key);
+    /**
+     * 互斥锁解决缓存击穿 及 存空字符串解决缓存穿透
+     * @param cachePrefix 缓存前缀
+     * @param lockPrefix 锁前缀
+     * @param lockTtl 锁过期时间
+     * @param id id
+     * @param type 返回类型
+     * @param dbFallback 数据库查询方法
+     * @param time 缓存时间
+     * @param unit 时间单位
+     * @return <R>
+     */
+    public <R, ID> R queryWithMutex(String cachePrefix, String lockPrefix, Long lockTtl, ID id, Class<R> type, Function<ID, R> dbFallback, Long time, TimeUnit unit) {
+        String key = cachePrefix + id;
+        // 1.从redis查询缓存
+        String json = stringRedisTemplate.opsForValue().get(key);
         // 2.判断是否存在
-        if (StrUtil.isNotBlank(shopJson)) {
-            // 3.存在，直接返回
-            return JSONUtil.toBean(shopJson, type);
+        if (StrUtil.isNotBlank(json)) {
+            return JSONUtil.toBean(json, type);
         }
-        // 判断命中的是否是空值
-        if (shopJson != null) {
-            // 返回一个错误信息
+        // 判断命中的是否是空值 -> 解决缓存穿透
+        if("".equals(json)) {
             return null;
         }
 
         // 4.实现缓存重建
-        // 4.1.获取互斥锁
-        String lockKey = LOCK_SHOP_KEY + id;
+        // 4.1 获取互斥锁
         R r = null;
+        String lockKey = lockPrefix + id;
         try {
-            boolean isLock = tryLock(lockKey);
-            // 4.2.判断是否获取成功
+            boolean isLock = tryLock(lockKey, lockTtl);
+            // 4.2 判断锁是否获取成功
+            // 4.3 失败则休眠重试
             if (!isLock) {
-                // 4.3.获取锁失败，休眠并重试
                 Thread.sleep(50);
-                return queryWithMutex(keyPrefix, id, type, dbFallback, time, unit);
+                return queryWithMutex(cachePrefix, lockPrefix, lockTtl, id, type, dbFallback, time, unit);
             }
-            // 4.4.获取锁成功，根据id查询数据库
-            r = dbFallback.apply(id);
-            // 5.不存在，返回错误
-            if (r == null) {
-                // 将空值写入redis
-                stringRedisTemplate.opsForValue().set(key, "", CACHE_NULL_TTL, TimeUnit.MINUTES);
-                // 返回错误信息
+
+            // 4.4 重建缓存，根据id查询数据库
+            // 4.4.1 Double Check
+            json = stringRedisTemplate.opsForValue().get(key);
+            if (StrUtil.isNotBlank(json)) {
+                return JSONUtil.toBean(json, type);
+            }
+            // 判断命中的是否是空值
+            if("".equals(json)) {
                 return null;
             }
-            // 6.存在，写入redis
+
+            r = dbFallback.apply(id);
+            Thread.sleep(200);
+            if (r == null) {
+                // Redis 写入空值，解决缓存穿透
+                this.set(key, "", CACHE_NULL_TTL, TimeUnit.MINUTES);
+                return null;
+            }
+            // 4.存在，写入redis
             this.set(key, r, time, unit);
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
-        }finally {
-            // 7.释放锁
+        } finally {
             unlock(lockKey);
         }
-        // 8.返回
         return r;
     }
 
-    private boolean tryLock(String key) {
-        Boolean flag = stringRedisTemplate.opsForValue().setIfAbsent(key, "1", 10, TimeUnit.SECONDS);
-        return BooleanUtil.isTrue(flag);
+    /**
+     * 获取互斥锁
+     * @param key 锁的key
+     * @param ttl 锁的过期时间
+     * @return 锁是否获取成功
+     */
+    private boolean tryLock(String key, long ttl) {
+        Boolean flag = stringRedisTemplate.opsForValue().setIfAbsent(
+                key,
+                "1",
+                ttl,
+                TimeUnit.SECONDS);
+        return Boolean.TRUE.equals(flag);
     }
 
     private void unlock(String key) {
@@ -1151,7 +795,7 @@ public class RedisIdWorker {
         long count = stringRedisTemplate.opsForValue().increment("icr:" + keyPrefix + ":" + date);
 
         // 3.拼接并返回
-        return timestamp << COUNT_BITS | count;
+        return timestamp << COUNT_BITS | (count & 0xffffffff);
     }
 }
 ```
@@ -1480,9 +1124,9 @@ public Result seckillVoucher(Long voucherId) {
 }
 ```
 
-**存在问题：**现在的问题还是和之前一样，并发过来，查询数据库，都不存在订单，所以我们还是需要加锁，但是乐观锁比较适合更新数据，而现在是插入数据，所以我们需要使用悲观锁操作
+**存在问题：** 现在的问题还是和之前一样，并发过来，查询数据库，都不存在订单，所以我们还是需要加锁，但是乐观锁比较适合更新数据，而现在是插入数据，所以我们需要使用悲观锁操作
 
-**注意：**在这里提到了非常多的问题，我们需要慢慢的来思考，首先我们的初始方案是封装了一个createVoucherOrder方法，同时为了确保他线程安全，在方法上添加了一把synchronized 锁
+**注意：** 在这里提到了非常多的问题，我们需要慢慢的来思考，首先我们的初始方案是封装了一个createVoucherOrder方法，同时为了确保他线程安全，在方法上添加了一把synchronized 锁
 
 ```java
 @Transactional
@@ -1574,9 +1218,35 @@ public  Result createVoucherOrder(Long voucherId) {
 
 但是以上做法依然有问题，因为你调用的方法，其实是this.的方式调用的，事务想要生效，还得利用代理来生效，所以这个地方，我们需要获得原始的事务对象， 来操作事务
 
-![1653383810643](./pictures/HMDP/practice/1653383810643.png)
+```java
+//细节1：锁的范围细节：必须锁住整个事务，否则锁释放但数据库还未更新
+synchronized (userId.toString().intern()) { // 细节2：锁住当前用户：为了保证锁定的是用户而不是不同对象。不同锁必须使用toString().intern()
+    // 细节3：事务失效问题（代理失效问题）因为事务是基于代理的，而this调用方法不会走代理所以事务会失效
+    // 解决方案：使用AopContext获取当前代理对象
+    IVoucherOrderService proxy = (IVoucherOrderService) AopContext.currentProxy();
+    return proxy.createVoucherOrder(voucherId);
+}
+```
 
-
+> 获取当前类的代理对象还需要两步：
+> 1.引入依赖：
+> ```java
+> <dependency>
+>     <groupId>org.aspectj</groupId>
+>     <artifactId>aspectjweaver</artifactId>
+> </dependency>
+> ```
+> 2.启动类暴露代理：
+> ```java
+> @EnableAspectJAutoProxy(exposeProxy = true)
+> @MapperScan("com.hmdp.mapper")
+> @SpringBootApplication
+> public class HmDianPingApplication {
+>     public static void main(String[] args) {
+>         SpringApplication.run(HmDianPingApplication.class, args);
+>     }
+> }
+> ```
 
 ### 3.7 集群环境下的并发问题
 
@@ -1643,12 +1313,18 @@ Zookeeper：zookeeper也是企业级开发中较好的一个实现分布式锁�
   * 互斥：确保只能有一个线程获取锁
   * 非阻塞：尝试一次，成功返回true，失败返回false
 
+```bash
+set key val nx ex 10
+```
+
 * 释放锁：
 
   * 手动释放
   * 超时释放：获取锁时添加一个超时时间
 
-  ![1653382669900](./pictures/HMDP/practice/1653382669900.png)
+```bash
+del key
+```
 
 核心思路：
 
@@ -1870,8 +1546,6 @@ end
 return 0
 ```
 
-
-
 ### 4.8 利用Java代码调用Lua脚本改造分布式锁
 
 lua脚本本身并不需要大家花费太多时间去研究，只需要知道如何调用，大致是什么意思即可，所以在笔记中并不会详细的去解释这些lua表达式的含义。
@@ -1913,15 +1587,15 @@ public void unlock() {
 
 笔者总结：我们一路走来，利用添加过期时间，防止死锁问题的发生，但是有了过期时间之后，可能出现误删别人锁的问题，这个问题我们开始是利用删之前 通过拿锁，比锁，删锁这个逻辑来解决的，也就是删之前判断一下当前这把锁是否是属于自己的，但是现在还有原子性问题，也就是我们没法保证拿锁比锁删锁是一个原子性的动作，最后通过lua表达式来解决这个问题
 
-但是目前还剩下一个问题锁不住，什么是锁不住呢，你想一想，如果当过期时间到了之后，我们可以给他续期一下，比如续个30s，就好像是网吧上网， 网费到了之后，然后说，来，网管，再给我来10块的，是不是后边的问题都不会发生了，那么续期问题怎么解决呢，可以依赖于我们接下来要学习redission啦
+但是目前还剩下一个问题锁不住，什么是锁不住呢，你想一想，如果当过期时间到了之后，我们可以给他续期一下，比如续个30s，就好像是网吧上网， 网费到了之后，然后说，来，网管，再给我来10块的，是不是后边的问题都不会发生了，那么续期问题怎么解决呢，可以依赖于我们接下来要学习redisson啦
 
 **测试逻辑：**
 
 第一个线程进来，得到了锁，手动删除锁，模拟锁超时了，其他线程会执行lua来抢锁，当第一天线程利用lua删除锁时，lua能保证他不能删除他的锁，第二个线程删除锁时，利用lua同样可以保证不会删除别人的锁，同时还能保证原子性。
 
-## 5、分布式锁-redission
+## 5、分布式锁-redisson
 
-### 5.1 分布式锁-redission功能介绍
+### 5.1 分布式锁-redisson功能介绍
 
 基于setnx实现的分布式锁存在下面的问题：
 
@@ -1929,21 +1603,21 @@ public void unlock() {
 
 **不可重试**：是指目前的分布式只能尝试一次，我们认为合理的情况是：当线程在获得锁失败后，他应该能再次尝试获得锁。
 
-**超时释放：**我们在加锁时增加了过期时间，这样的我们可以防止死锁，但是如果卡顿的时间超长，虽然我们采用了lua表达式防止删锁的时候，误删别人的锁，但是毕竟没有锁住，有安全隐患
+**超时释放：** 我们在加锁时增加了过期时间，这样的我们可以防止死锁，但是如果卡顿的时间超长，虽然我们采用了lua表达式防止删锁的时候，误删别人的锁，但是毕竟没有锁住，有安全隐患
 
 **主从一致性：** 如果Redis提供了主从集群，当我们向集群写数据时，主机需要异步的将数据同步给从机，而万一在同步过去之前，主机宕机了，就会出现死锁问题。
 
 ![1653546070602](./pictures/HMDP/practice/1653546070602.png)
 
-那么什么是Redission呢
+那么什么是Redisson呢
 
 Redisson是一个在Redis的基础上实现的Java驻内存数据网格（In-Memory Data Grid）。它不仅提供了一系列的分布式的Java常用对象，还提供了许多分布式服务，其中就包含了各种分布式锁的实现。
 
-Redission提供了分布式锁的多种多样的功能
+Redisson提供了分布式锁的多种多样的功能
 
 ![1653546736063](./pictures/HMDP/practice/1653546736063.png)
 
-### 5.2 分布式锁-Redission快速入门
+### 5.2 分布式锁-Redisson快速入门
 
 引入依赖：
 
@@ -1974,11 +1648,11 @@ public class RedissonConfig {
 
 ```
 
-如何使用Redission的分布式锁
+如何使用Redisson的分布式锁
 
 ```java
 @Resource
-private RedissionClient redissonClient;
+private RedissonClient redissonClient;
 
 @Test
 void testRedisson() throws Exception{
@@ -1994,11 +1668,7 @@ void testRedisson() throws Exception{
             //释放锁
             lock.unlock();
         }
-        
     }
-    
-    
-    
 }
 ```
 
@@ -2051,11 +1721,11 @@ public Result seckillVoucher(Long voucherId) {
  }
 ```
 
-### 5.3 分布式锁-redission可重入锁原理
+### 5.3 分布式锁-redisson可重入锁原理
 
 在Lock锁中，他是借助于底层的一个voaltile的一个state变量来记录重入的状态的，比如当前没有人持有这把锁，那么state=0，假如有人持有这把锁，那么state=1，如果持有这把锁的人再次持有这把锁，那么state就会+1 ，如果是对于synchronized而言，他在c语言代码中会有一个count，原理和state类似，也是重入一次就加一，释放一次就-1 ，直到减少成0 时，表示当前这把锁没有被人持有。  
 
-在redission中，我们的也支持支持可重入锁
+在redisson中，我们的也支持支持可重入锁
 
 在分布式锁中，他采用hash结构用来存储锁，其中大key表示表示这把锁是否存在，用小key表示当前这把锁被哪个线程持有，所以接下来我们一起分析一下当前的这个lua表达式
 
@@ -2105,7 +1775,7 @@ redis.call('hincrby', KEYS[1], ARGV[2], 1)
 
 ![1653548087334](./pictures/HMDP/practice/1653548087334.png)
 
-### 5.4 分布式锁-redission锁重试和WatchDog机制
+### 5.4 分布式锁-redisson锁重试和WatchDog机制
 
 **说明**：由于课程中已经说明了有关tryLock的源码解析以及其看门狗原理，所以笔者在这里给大家分析lock()方法的源码解析，希望大家在学习过程中，能够掌握更多的知识
 
@@ -2203,7 +1873,7 @@ private void renewExpiration() {
 }
 ```
 
-### 5.5 分布式锁-redission锁的MutiLock原理
+### 5.5 分布式锁-redisson锁的MutiLock原理
 
 为了提高redis的可用性，我们会搭建集群或者主从，现在以主从为例
 
@@ -2211,13 +1881,13 @@ private void renewExpiration() {
 
 ![1653553998403](./pictures/HMDP/practice/1653553998403.png)
 
-为了解决这个问题，redission提出来了MutiLock锁，使用这把锁咱们就不使用主从了，每个节点的地位都是一样的， 这把锁加锁的逻辑需要写入到每一个主丛节点上，只有所有的服务器都写入成功，此时才是加锁成功，假设现在某个节点挂了，那么他去获得锁的时候，只要有一个节点拿不到，都不能算是加锁成功，就保证了加锁的可靠性。
+为了解决这个问题，redisson提出来了MutiLock锁，使用这把锁咱们就不使用主从了，每个节点的地位都是一样的， 这把锁加锁的逻辑需要写入到每一个主丛节点上，只有所有的服务器都写入成功，此时才是加锁成功，假设现在某个节点挂了，那么他去获得锁的时候，只要有一个节点拿不到，都不能算是加锁成功，就保证了加锁的可靠性。
 
 ![1653554055048](./pictures/HMDP/practice/1653554055048.png)
 
 那么MutiLock 加锁原理是什么呢？笔者画了一幅图来说明
 
-当我们去设置了多个锁时，redission会将多个锁添加到一个集合中，然后用while循环去不停去尝试拿锁，但是会有一个总共的加锁时间，这个时间是用需要加锁的个数 * 1500ms ，假设有3个锁，那么时间就是4500ms，假设在这4500ms内，所有的锁都加锁成功， 那么此时才算是加锁成功，如果在4500ms有线程加锁失败，则会再次去进行重试.
+当我们去设置了多个锁时，redisson会将多个锁添加到一个集合中，然后用while循环去不停去尝试拿锁，但是会有一个总共的加锁时间，这个时间是用需要加锁的个数 * 1500ms ，假设有3个锁，那么时间就是4500ms，假设在这4500ms内，所有的锁都加锁成功， 那么此时才算是加锁成功，如果在4500ms有线程加锁失败，则会再次去进行重试.
 
 
 
@@ -2459,7 +2129,7 @@ private void init() {
         return Result.ok(orderId);
     }
      
-      @Transactional
+    @Transactional
     public  void createVoucherOrder(VoucherOrder voucherOrder) {
         Long userId = voucherOrder.getUserId();
         // 5.1.查询订单
@@ -2482,7 +2152,6 @@ private void init() {
             return ;
         }
         save(voucherOrder);
- 
     }
 
 ```

@@ -576,7 +576,7 @@ public class UserServiceImpl implements UserService {
 }
 ```
 #### @Resource 注入
-- @Resource 注解也可以完成属性注入。那它和 @Autowired 注解有什么区别？
+@Resource 注解也可以完成属性注入。那它和 @Autowired 注解有什么区别？
 - @Resource 注解是 JDK 扩展包中的，也就是说属于 JDK 的一部分。所以该注解是标准注解，更加具有通用性。(JSR-250 标准中制定的注解类型。JSR 是 Java 规范提案。)
 - @Autowired 注解是 Spring 框架自己的。
 - @Resource 注解默认根据名称装配 byName，未指定 name 时，使用属性名作为 name。通过name 找不到的话会自动启动通过类型 byType 装配。
@@ -1885,7 +1885,7 @@ Resource的一个实现类，用来访问网络资源，它支持URL的绝对路
 ```java
 /*
     //1 访问网络资源
-	//loadAndReadUrlResource("http://www.atguigu.com");
+    //loadAndReadUrlResource("http://www.atguigu.com");
     
     //2 访问文件系统资源（项目根路径下，而非模块）
     loadAndReadUrlResource("file:1.txt");
@@ -1942,7 +1942,7 @@ InputStreamResource 是给定的输入流(InputStream)的 Resource 实现。它�
 #### ByteArrayResource
 字节数组的 Resource 实现类。通过给定的数组创建了一个 ByteArrayInputStream。它对于从任何给定的字节数组加载内容非常有用，而无需求助于单次使用的 InputStreamResource 。
 
-### ResourceLoader 接口（重点）
+### ResourceLoader 接口
 Spring 提供如下两个标志性接口：
 1. **ResourceLoader** ： 该接口实现类的实例可以获得一个Resource实例。
 2. ResourceLoaderAware ： 该接口实现类的实例将获得一个ResourceLoader的引用。
@@ -1963,7 +1963,7 @@ Resrouce res = ctx.getResource("file:bean.xml");
 // 返回的 Resource 实现类：UrlResource
 Resource res = ctx.getResource("http://localhost:8080/beans.xml");
 ```
-### ResourceLoaderAware 接口
+### ~~ResourceLoaderAware 接口（了解）~~
 ResourceLoaderAware 接口实现类的实例将获得一个 ResourceLoader 的引用， ResourceLoaderAware 接口也提供了一个 setResourceLoader() 方法，该方法将由 Spring 容器负责调用，Spring 容器会将一个 ResourceLoader 对象作为该方法的参数传入。
 
 如果把实现 ResourceLoaderAware 接口的 Bean 类部署在 Spring 容器中，Spring 容器会将自身当成 ResourceLoader 作为 setResourceLoader() 方法的参数传入。由于 ApplicationContext 的实现类都实现了 ResourceLoader 接口，Spring 容器自身完全可作为 ResorceLoader 使用。

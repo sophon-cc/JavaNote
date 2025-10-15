@@ -233,6 +233,12 @@ public void testSaveBatch(){
 }
 ```
 
+> 通用 Service 中进行简单查询可以不注入 XxxMapper 直接使用 `query()`、`update()`、`save()`、`remove` 语句访问数据库，进一步简化操作。如：
+> ```java
+> User user = query().eq("phone", loginForm.getPhone()).one();
+> List<User> users = query().eq("phone", loginForm.getPhone> ()).list();
+> ```
+
 # 四、常用注解
 ## 1、@TableName
 当数据库表名和实体类表名不一致时，如实体类为 User 数据库表为 t_user。调用默认的 `BaseMapper` 中的方法会出现 `java.sql.SQLSyntaxErrorException: Table 'mybatis_plus.user' doesn't exist` 错误。
@@ -847,5 +853,5 @@ public void testDynamicDataSource(){
 # 10、MyBatisX 插件
 使用 MyBatisX 加速开发技巧。
 - 编写任意接口方法后，ctrl + enter 即可生成接口对应 xml 文件。
-- 编写接口时分别使用 insert、delete、update、select 开头编写接口方法，MyBatisX 会自动提示模板代码。ctrl + enter 即可补全对应的 xml 对应方法 sql 语句。
+- 编写接口时分别使用 insert、delete、update、select 开头编写接口方法，MyBatisX 会自动提示模板代码。alt + enter 即可补全对应的 xml 对应方法 sql 语句。
 
