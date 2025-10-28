@@ -233,7 +233,7 @@ public void testSaveBatch(){
 }
 ```
 
-> 通用 Service 中进行简单查询可以不注入 XxxMapper 直接使用 `query()`、`update()`、`save()`、`remove` 语句访问数据库，进一步简化操作。如：
+> 通用 Service 中进行简单查询可以不注入 XxxMapper 直接使用 `query()`、`update()`、`save()`、`remove()` 语句访问数据库，进一步简化操作。如：
 > ```java
 > User user = query().eq("phone", loginForm.getPhone()).one();
 > List<User> users = query().eq("phone", loginForm.getPhone> ()).list();

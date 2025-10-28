@@ -464,7 +464,7 @@ public String testRest(@PathVariable("id") String id, @PathVariable("username") 
 
 # 四、SpringMVC获取请求参数
 
-## 1、通过ServletAPI获取（了解）
+## ~~1、通过ServletAPI获取（了解）~~
 
 将HttpServletRequest作为控制器方法的形参，此时HttpServletRequest类型的参数表示封装了当前请求的请求报文的对象
 

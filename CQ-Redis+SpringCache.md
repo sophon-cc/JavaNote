@@ -86,7 +86,7 @@ ZCOUNT key min max                        # 统计score值在给定范围内的�
 Redis的通用命令是不分数据类型的，都可以使用的命令：
 ```bash
 SELECT index                # 选择 Redis 库
-KEYS pattern                # 查找所有符合给定模式( pattern)的 key 
+KEYS pattern                # 查找所有符合给定模式(pattern)的 key 
 EXISTS key                  # 检查给定 key 是否存在
 TYPE key                    # 返回 key 所储存的值的类型
 DEL key1 [key2 ...]         # 该命令用于在 key 存在是删除 key
