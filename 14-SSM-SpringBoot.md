@@ -1,6 +1,6 @@
 # SpringBoot 特性
 > 约定大于配置
-> 框架的框架：快速整合，快速启动
+> 框架的框架：快速整合，快速部署
 
 ## **1、简介**
 SpringBoot 帮我们简单、快速地创建一个独立的、生产级别的 Spring 应用，即使用最简单的方式快速整合所有技术栈。大多数 SpringBoot 应用只需要编写少量配置即可快速整合 Spring 平台以及第三方技术。
@@ -208,9 +208,7 @@ SpringBoot 还预定义了两个组：
 SpringBoot 默认只把日志写在控制台，如果想额外记录到文件，可以在application.properties中添加 logging.file.name 或 logging.file.path 配置项。
 
 在 `application.properties` 中配置日志输出到文件：
-```properties
 
-```
 输出到文件的日志越来越大越来越多就需要文件归档与滚动切割。
 - 归档：每天的日志单独存到一个文档中。
 - 切割：每个文件10MB，超过大小切割成另外一个文件。
@@ -268,6 +266,7 @@ public class DataSourceConfig {
 }
 ```
 > 若未定义环境标识，默认处于 default 环境。
+
 2. 激活环境标识
 在 application.properties 中配置 `spring.profiles.active=环境标识` 。即可激活标识环境组件。
 ```properties

@@ -440,6 +440,8 @@ public LettuceClientConfigurationBuilderCustomizer clientConfigurationBuilderCus
 
 - 客户端请求可以访问集群任意节点，最终都会被转发到正确节点
 
+> 分片集群互相检测以及路由转发，使其可以不用配置哨兵。
+
 具体搭建流程参考课前资料《Redis集群.md》：
 
 ![image-20210725155806288](./pictures/RedisAdvance/DistributedCache/image-20210725155806288.png) 

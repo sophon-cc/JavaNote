@@ -314,6 +314,46 @@ public class User {
 }
 ```
 
+**情况三：字段不存在**
+实体类属性可能是 VO 或 DTO 定义了公共可用字段，但是数据库并不存在该字段。例如，假设实体类定义了num 数据库中没有该字段，此时必须告诉 MP 该字段忽略。
+
+```java
+@Data
+@TableName("t_user")
+public class User {
+    @TableId(value = "uid")
+    private Long id;
+    @TableField("name")
+    private String userName;
+    private Integer age;
+    private String email;
+    @TableField(exist = false)
+    private Integer num;
+}
+```
+
+**情况四：字段以 is 开头**
+实体类属性可能以 is 开头，例如实体类字段为 isMarried 数据库字段为 is_married，这种情况下 MP 会去掉 is 并按驼峰转下划线处理，此时也需要告诉 MP 该字段。
+
+```java
+@Data
+@TableName("t_user")
+public class User {
+    @TableId(value = "uid")
+    private Long id;
+    @TableField("name")
+    private String userName;
+    private Integer age;
+    private String email;
+    @TableField(exist = false)
+    private Integer num;
+    @TableField("is_married")
+    private Boolean isMarried;
+}
+```
+
+> 补充情况：若字段命名与数据库关键字重复也需要指明告诉 MP，例如 @TableField("`order`")
+
 ## 4、@TableLogic
 物理删除：真实删除，将对应数据从数据库中删除，之后查询不到此条被删除的数据。
 逻辑删除：假删除，将对应数据中代表是否被删除字段的状态修改为“被删除状态”，之后在数据库中仍旧能看到此条数据记录。
@@ -698,6 +738,7 @@ public enum GenderEnum {
 }
 ```
 > @EnumValue 标记数据库存的值，告诉 MP 更新和查询数据库该字段时应该用哪个值。
+> 若需要指明前端得到的数据可以使用 @JsonValue 指明。
 
 ## 测试
 ```java
