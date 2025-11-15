@@ -278,8 +278,124 @@ PING 172.17.0.2 (172.17.0.2) 56(84) bytes of data.
 | `docker network disconnect` | 使指定容器连接离开某网络 |
 | `docker network inspect` | 查看网络详细信息 |
 
+```bash
+# 1.首先通过命令创建一个网络
+docker network create hmall
 
-# 3 项目部署
+# 2.然后查看网络
+docker network ls
+# 结果：
+NETWORK ID     NAME      DRIVER    SCOPE
+639bc44d0a87   bridge    bridge    local
+403f16ec62a2   hmall     bridge    local
+0dc0f72a0fbb   host      host      local
+cd8d3e8df47b   none      null      local
+# 其中，除了hmall以外，其它都是默认的网络
+
+# 3.让dd和mysql都加入该网络，注意，在加入网络时可以通过--alias给容器起别名
+# 这样该网络内的其它容器可以用别名互相访问！
+# 3.1.mysql容器，指定别名为db，另外每一个容器都有一个别名是容器名
+docker network connect hmall mysql --alias db
+# 3.2.db容器，也就是我们的java项目
+docker network connect hmall dd
+
+# 4.进入dd容器，尝试利用别名访问db
+# 4.1.进入容器
+docker exec -it dd bash
+# 4.2.用db别名访问
+ping db
+# 结果
+PING db (172.18.0.2) 56(84) bytes of data.
+64 bytes from mysql.hmall (172.18.0.2): icmp_seq=1 ttl=64 time=0.070 ms
+64 bytes from mysql.hmall (172.18.0.2): icmp_seq=2 ttl=64 time=0.056 ms
+# 4.3.用容器名访问
+ping mysql
+# 结果：
+PING mysql (172.18.0.2) 56(84) bytes of data.
+64 bytes from mysql.hmall (172.18.0.2): icmp_seq=1 ttl=64 time=0.044 ms
+64 bytes from mysql.hmall (172.18.0.2): icmp_seq=2 ttl=64 time=0.054 ms
+```
+
+> 注意：
+> - 在同一个自定义网络中的容器，可以容器名互相访问。
+> - 容器重启后，ip地址变了也仍然可以用容器名去进行容器交流。
+> - 在 Spring Boot 乃至 Nginx 中仍然可以配置容器名作为虚拟ip。
+>   - 1. 例如 Nginx 中 nginx.conf 配置 `proxy_pass http://hmall:8080;` 。
+>   - 2. 例如 Spring Boot 中 application-dev.yaml 配置： `hm.db.host=mysql` 。其中 mysql 为容器名（该容器已经连接网络）。
+
+# 3 Docker Compose
+## 3.1 使用示例
+Docker Compose 可以帮助我们实现多个相互关联的Docker容器的快速部署。它允许用户通过一个单独的 docker-compose.yml 模板文件（YAML 格式）来定义一组相关联的应用容器。
+
+docker-compose文件中可以定义多个相互关联的应用容器，每一个应用容器被称为一个服务（service）。由于service就是在定义某个应用的运行时参数，因此与docker run参数非常相似。
+举例来说，用docker run部署MySQL的命令如下：
+
+```bash
+docker run -d \
+  --name mysql \
+  -p 3306:3306 \
+  -e TZ=Asia/Shanghai \
+  -e MYSQL_ROOT_PASSWORD=123 \
+  -v ./mysql/data:/var/lib/mysql \
+  -v ./mysql/conf:/etc/mysql/conf.d \
+  -v ./mysql/init:/docker-entrypoint-initdb.d \
+  --network hmall
+  mysql
+```
+
+如果用docker-compose.yml文件来定义，就是这样：
+
+```yaml
+version: "3.8"
+
+services:
+  mysql:
+    image: mysql
+    container_name: mysql
+    ports:
+      - "3306:3306"
+    environment:
+      TZ: Asia/Shanghai
+      MYSQL_ROOT_PASSWORD: 123
+    volumes:
+      - "./mysql/conf:/etc/mysql/conf.d"
+      - "./mysql/data:/var/lib/mysql"
+    networks:
+      - new
+networks:
+  new:
+    name: hmall
+```
+
+## 3.2 基本语法
+
+基本语法如下：
+
+```bash
+docker compose [OPTIONS] [COMMAND]
+```
+
+Options（选项）
+
+| 参数 | 说明 |
+|------|------|
+| `-f` | 指定 compose 文件的路径和名称 |
+| `-p` | 指定 project 名称。project 是当前 compose 文件中设置的多个 service 的集合，是逻辑概念 |
+
+Commands（命令）
+
+| 命令 | 说明 |
+|------|------|
+| `up` | 创建并启动所有 service 容器 |
+| `down` | 停止并移除所有容器、网络 |
+| `ps` | 列出所有启动的容器 |
+| `logs` | 查看指定容器的日志 |
+| `stop` | 停止容器 |
+| `start` | 启动容器 |
+| `restart` | 重启容器 |
+| `top` | 查看运行的进程 |
+| `exec` | 在指定的运行中容器中执行命令 |
+
 
 # 附：Docker 安装
 1. 卸载旧版
