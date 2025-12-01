@@ -1475,9 +1475,10 @@ public String testUp(MultipartFile photo, HttpSession session) throws IOExceptio
 }
 ```
 
-# 十、拦截器
+# ~~十、拦截器~~
+参考 [12-SSM-SpringMVC # 拦截器](./12-SSM-SpringMVC.md#拦截器) 配置及说明。
 
-## 1、拦截器的配置
+## ~~1、拦截器的配置~~
 
 SpringMVC中的拦截器用于拦截控制器方法的执行
 
@@ -1500,7 +1501,7 @@ SpringMVC的拦截器必须在SpringMVC的配置文件中进行配置：
 -->
 ```
 
-## 2、拦截器的三个抽象方法
+## 2、~~拦截器的三个抽象方法~~
 
 SpringMVC中的拦截器有三个抽象方法：
 
@@ -1510,7 +1511,7 @@ postHandle：控制器方法执行之后执行postHandle()
 
 afterComplation：处理完视图和模型数据，渲染视图完毕之后执行afterComplation()
 
-## 3、多个拦截器的执行顺序
+## 3、~~多个拦截器的执行顺序~~
 
 a>若每个拦截器的preHandle()都返回true
 

@@ -454,6 +454,18 @@ public class MyHandlerInterceptor implements HandlerInterceptor {
 }
 ```
 
+### 拦截器处理顺序
+
+a>若每个拦截器的preHandle()都返回true
+
+此时多个拦截器的执行顺序和拦截器在SpringMVC的配置文件的配置顺序有关：
+
+preHandle()会按照配置的顺序执行，而postHandle()和afterComplation()会按照配置的反序执行
+
+b>若某个拦截器的preHandle()返回了false
+
+postHandle()都不执行，返回false的拦截器之前的拦截器的afterComplation()会执行
+
 ### 拦截器和过滤器的区别
 | 对比项      | 拦截器 (HandlerInterceptor)                                  | 过滤器 (Filter)                                             |
 | -------- | -------------------------------------------------------------- | -------------------------------------------------------- |

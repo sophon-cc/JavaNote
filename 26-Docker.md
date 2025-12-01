@@ -88,6 +88,7 @@ docker run -d \
 
 补充：
 默认情况下，每次重启虚拟机我们都需要手动启动Docker和Docker中的容器。通过命令可以实现开机自启：
+
 ```bash
 # Docker开机自启
 systemctl enable docker

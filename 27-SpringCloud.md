@@ -1,0 +1,1482 @@
+# Spring Cloud
+
+微服务架构，首先是服务化，就是将单体架构中的功能模块从单体应用中拆分出来，独立部署为多个服务。同时要满足下面的一些特点：
+- 单一职责：一个微服务负责一部分业务功能，并且其核心数据不依赖于其它模块。
+- 团队自治：每个微服务都有自己独立的开发、测试、发布、运维人员，团队人员规模不超过10人
+- 服务自治：每个微服务都独立打包部署，访问自己独立的数据库。并且要做好服务隔离，避免对其它服务产生影响
+
+![](./pictures/SpringCloud/SpringCloud.png)
+
+微服务拆分以后碰到的各种问题都有对应的解决方案和微服务组件，而SpringCloud框架可以说是目前Java领域最全面的微服务组件的集合了。
+
+# 服务注册与发现 Nacos
+
+## 注册中心原理
+
+在微服务远程调用的过程中，包括两个角色：
+- 服务提供者：提供接口供其它微服务访问，比如item-service
+- 服务消费者：调用其它微服务提供的接口，比如cart-service
+
+> 服务的消费者也可以提供服务，服务的提供者也可以消费服务
+
+在大型微服务项目中，服务提供者的数量会非常多，为了管理这些服务就引入了注册中心的概念。注册中心、服务提供者、服务消费者三者间关系如下：
+
+![](./pictures/SpringCloud/RegisterCenter.png)
+
+流程如下：
+- 服务启动时就会注册自己的服务信息（服务名、IP、端口）到注册中心。
+- 调用者可以从注册中心订阅想要的服务，获取服务对应的实例列表（1个服务可能多实例部署）。
+- 调用者自己对实例列表负载均衡，挑选一个实例。
+- 调用者向该实例发起远程调用。
+
+当服务提供者的实例宕机或者启动新实例时，调用者如何得知呢？
+- 当服务有新实例启动时，会发送注册服务请求，其信息会被记录在注册中心的服务实例列表。
+- 服务提供者会定期向注册中心发送请求，报告自己的健康状态（心跳请求）。当注册中心长时间收不到提供者的心跳时，会认为该实例宕机，将其从服务的实例列表中剔除。
+- 当注册中心服务列表变更时，会主动通知微服务，更新本地服务列表。
+
+## Nacos 注册中心
+目前开源的注册中心框架有很多，国内比较常见的有：
+- Eureka：Netflix公司出品，目前被集成在SpringCloud当中，一般用于Java应用
+- Nacos：Alibaba公司出品，目前被集成在SpringCloudAlibaba中，一般用于Java应用
+- Consul：HashiCorp公司出品，目前集成在SpringCloud中，不限制微服务语言
+
+以上几种注册中心都遵循SpringCloud中的API规范，因此在业务开发使用上没有太大差异。由于Nacos是国内产品，中文文档比较丰富，而且同时具备配置管理功能（后面会学习），因此在国内使用较多，课堂中我们会Nacos为例来学习。
+
+官方网站如下：
+https://nacos.io/zh-cn/
+
+我们基于Docker来部署Nacos的注册中心，首先我们要准备MySQL数据库表，用来存储Nacos的数据（此案例中，nacos存储数据的数据库由自己创建）。由于是Docker部署，所以大家需要将资料中的SQL文件导入到你Docker中的MySQL容器中：
+
+```mysql
+-- 案例数据库建库（database：nacos）建表（table：12张表）操作略
+```
+
+docker 挂载 linux 本地文件的路径和配置 `/root/nacos/custom.env` ：
+
+```txt
+PREFER_HOST_MODE=hostname
+MODE=standalone
+SPRING_DATASOURCE_PLATFORM=mysql
+MYSQL_SERVICE_HOST=192.168.150.101
+MYSQL_SERVICE_DB_NAME=nacos
+MYSQL_SERVICE_PORT=3306
+MYSQL_SERVICE_USER=root
+MYSQL_SERVICE_PASSWORD=123
+MYSQL_SERVICE_DB_PARAM=characterEncoding=utf8&connectTimeout=1000&socketTimeout=3000&autoReconnect=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+```
+
+上传 linux 完成后，进入root目录，然后执行下面的docker命令：
+
+```bash
+docker run -d \
+    --name nacos \
+    --env-file ./nacos/custom.env \
+    -p 8848:8848 \
+    -p 9848:9848 \
+    -p 9849:9849 \
+    --restart=always \
+    nacos/nacos-server:v2.1.0-slim
+```
+
+启动完成后，访问下面地址：http://192.168.150.101:8848/nacos/，注意将192.168.150.101替换为你自己的虚拟机IP地址。
+首次访问会跳转到登录页，账号密码都是nacos。
+
+> 注意：这里有一个坑点，如果虚拟机网络环境改变，需要删除容器修改 custom.env 中的 MYSQL_SERVICE_HOST 配置为新 ip 地址。否则登录 nacos 控制台会显示账号或密码错误。
+
+## 服务注册
+
+接下来，我们把item-service注册到Nacos，步骤如下：
+- 引入依赖
+- 配置Nacos地址
+- 重启
+
+**1.添加依赖**
+
+在item-service的pom.xml中添加依赖：
+
+```xml
+<!--nacos 服务注册发现-->
+<dependency>
+    <groupId>com.alibaba.cloud</groupId>
+    <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+</dependency>
+```
+
+**2.配置Nacos**
+
+在item-service的application.yml中添加nacos地址配置：
+
+```yaml
+spring:
+application:
+    name: item-service # 服务名称
+cloud:
+    nacos:
+    server-addr: 192.168.150.101:8848 # nacos地址
+```
+
+**3.测试启动多服务实例**
+
+为了测试一个服务多个实例的情况，我们再配置一个item-service的部署实例：
+
+![](./pictures/SpringCloud/ItemApplicationConfig.png)
+
+然后配置启动项，注意重命名并且配置新的端口，避免冲突：
+
+![](./pictures/SpringCloud/ItemApplicationPort.png)
+
+重启item-service的两个实例,访问nacos控制台（http://192.168.150.101:8848/nacos/），可以发现服务注册成功：
+
+![](./pictures/SpringCloud/NacosTerm.png)
+
+## 服务发现
+
+服务的消费者要去nacos订阅服务，这个过程就是服务发现，步骤如下：
+- 引入依赖
+- 配置Nacos地址
+- 发现并调用服务
+
+**1.引入依赖**
+
+服务发现除了要引入nacos依赖以外，由于还需要负载均衡，因此要引入SpringCloud提供的LoadBalancer依赖。
+我们在cart-service中的pom.xml中添加下面的依赖：
+
+```xml
+<!--nacos 服务注册发现-->
+<dependency>
+    <groupId>com.alibaba.cloud</groupId>
+    <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+</dependency>
+```
+
+可以发现，这里Nacos的依赖于服务注册时一致，这个依赖中同时包含了服务注册和发现的功能。因为任何一个微服务都可以调用别人，也可以被别人调用，即可以是调用者，也可以是提供者。
+因此，等一会儿cart-service启动，同样会注册到Nacos。
+
+**2.配置Nacos地址**
+
+在cart-service的application.yml中添加nacos地址配置：
+
+```yaml
+spring:
+cloud:
+    nacos:
+    server-addr: 192.168.150.101:8848
+```
+
+接下来，服务调用者cart-service就可以去订阅item-service服务了。不过item-service有多个实例，而真正发起调用时只需要知道一个实例的地址。
+因此，服务调用者必须利用负载均衡的算法，从多个实例中挑选一个去访问。常见的负载均衡算法有：
+- 随机
+- 轮询
+- IP的hash
+- 最近最少访问
+- ...
+
+主要使用 SpringCloud 已经帮我们自动装配的服务发现工具 DiscoveryClient 。
+传统方式比较繁杂演示略。
+
+# 远程调用 OpenFeign
+
+远程调用的关键点就在于四个：
+- 请求方式
+- 请求路径
+- 请求参数
+- 返回值类型
+
+所以，OpenFeign就利用SpringMVC的相关注解来声明上述4个参数，然后基于动态代理帮我们生成远程调用的代码，而无需我们手动再编写，非常方便。
+
+## 快速入门
+
+我们还是以cart-service中的查询我的购物车为例。因此下面的操作都是在cart-service中进行。
+
+**1.引入依赖**
+
+在cart-service服务的pom.xml中引入OpenFeign的依赖和loadBalancer依赖：
+
+```xml
+<!--openFeign-->
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-openfeign</artifactId>
+</dependency>
+<!--负载均衡器-->
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-loadbalancer</artifactId>
+</dependency>
+
+<!--nacos 服务注册发现 服务消费者也必须注册服务，注册参照此文档服务注册-->
+<dependency>
+    <groupId>com.alibaba.cloud</groupId>
+    <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+</dependency>
+```
+
+**2.启用OpenFeign**
+
+接下来，我们在cart-service的CartApplication启动类上添加注解，启动OpenFeign功能：
+
+![](./pictures/SpringCloud/EnableFeignClients.png)
+
+**3.编写OpenFeign客户端**
+
+在cart-service中，定义一个新的接口，编写Feign客户端：
+其中代码如下：
+
+```java
+package com.hmall.cart.client;
+
+import com.hmall.cart.domain.dto.ItemDTO;
+import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+
+import java.util.List;
+
+@FeignClient("item-service")
+public interface ItemClient {
+
+    @GetMapping("/items")
+    List<ItemDTO> queryItemByIds(@RequestParam("ids") Collection<Long> ids);
+}
+```
+
+这里只需要声明接口，无需实现方法。接口中的几个关键信息：
+- @FeignClient("item-service") ：声明服务名称
+- @GetMapping ：声明请求方式
+- @GetMapping("/items") ：声明请求路径
+- @RequestParam("ids") Collection<Long> ids ：声明请求参数
+- List<ItemDTO> ：返回值类型
+
+有了上述信息，OpenFeign就可以利用动态代理帮我们实现这个方法，并且向http://item-service/items 发送一个GET请求，携带ids为请求参数，并自动将返回值处理为List<ItemDTO>。
+我们只需要直接调用这个方法，即可实现远程调用了。
+
+**4.使用FeignClient**
+
+最后，我们在cart-service的com.hmall.cart.service.impl.CartServiceImpl中改造代码，直接调用ItemClient的方法：
+
+![](./pictures/SpringCloud/UseFeign.png)
+
+feign替我们完成了服务拉取、负载均衡、发送http请求的所有工作，是不是看起来优雅多了。
+
+
+## 连接池
+
+Feign底层发起http请求，依赖于其它的框架。其底层支持的http客户端实现包括：
+- HttpURLConnection：默认实现，不支持连接池
+- Apache HttpClient ：支持连接池
+- OKHttp：支持连接池
+
+因此我们通常会使用带有连接池的客户端来代替默认的HttpURLConnection。比如，我们使用 OK Http 。
+
+**1.引入依赖**
+
+在cart-service的pom.xml中引入依赖：
+
+```xml
+<!--OK http 的依赖 -->
+<dependency>
+<groupId>io.github.openfeign</groupId>
+<artifactId>feign-okhttp</artifactId>
+</dependency>
+```
+
+**2.开启连接池**
+
+在cart-service的application.yml配置文件中开启Feign的连接池功能：
+
+```yaml
+feign:
+okhttp:
+    enabled: true # 开启OKHttp功能
+```
+
+## 最佳实践
+如果别的微服务如 trade-service 使用到了 Item 的 Feign 客户端，我们就需要在trade-service中再次定义ItemClient接口，这不是重复编码吗？ 有什么办法能加避免重复编码呢？
+
+避免重复编码的办法就是抽取。不过这里有两种抽取思路：
+- 思路1：抽取到微服务之外的公共module（推荐）
+- 思路2：每个微服务自己抽取一个module
+
+![](./pictures/SpringCloud/BestPractices.png)
+
+方案1抽取更加简单，工程结构也比较清晰，但缺点是整个项目耦合度偏高。
+方案2抽取相对麻烦，工程结构相对更复杂，但服务之间耦合度降低。
+
+## 日志配置
+
+OpenFeign只会在FeignClient所在包的日志级别为DEBUG时，才会输出日志。而且其日志级别有4级：
+- NONE：不记录任何日志信息，这是默认值。
+- BASIC：仅记录请求的方法，URL以及响应状态码和执行时间
+- HEADERS：在BASIC的基础上，额外记录了请求和响应的头信息
+- FULL：记录所有请求和响应的明细，包括头信息、请求体、元数据。
+Feign默认的日志级别就是NONE，所以默认我们看不到请求日志。
+
+**1.定义日志级别**
+
+在hm-api模块下新建一个配置类，定义Feign的日志级别：
+![](./pictures/SpringCloud/ConfigLog.png)
+
+代码如下：
+
+```java
+package com.hmall.api.config;
+
+import feign.Logger;
+import org.springframework.context.annotation.Bean;
+
+public class DefaultFeignConfig {
+    @Bean
+    public Logger.Level feignLogLevel(){
+        return Logger.Level.FULL;
+    }
+}
+```
+
+**2.配置**
+
+接下来，要让日志级别生效，还需要配置这个类。有两种方式：
+- 局部生效：在某个FeignClient中配置，只对当前FeignClient生效
+```java
+@FeignClient(value = "item-service", configuration = DefaultFeignConfig.class)
+```
+
+- 全局生效：在@EnableFeignClients中配置，针对所有FeignClient生效。
+```java
+@EnableFeignClients(defaultConfiguration = DefaultFeignConfig.class)
+```
+
+# 网关路由 SpringCloudGateway
+
+由于每个微服务都有不同的地址或端口，入口不同，相信大家在与前端联调的时候发现了一些问题：
+- 请求不同数据时要访问不同的入口，需要维护多个入口地址，麻烦
+- 前端无法调用nacos，无法实时更新服务列表
+
+单体架构时我们只需要完成一次用户登录、身份校验，就可以在所有业务中获取到用户信息。而微服务拆分后，每个微服务都独立部署，这就存在一些问题：
+- 每个微服务都需要编写登录校验、用户信息获取的功能吗？
+- 当微服务之间调用时，该如何传递用户信息？
+
+通过今天的学习你将掌握下列能力：
+- 会利用微服务网关做请求路由
+- 会利用微服务网关做登录身份校验
+- 会利用Nacos实现统一配置管理
+- 会利用Nacos实现配置热更新
+
+什么是网关？
+
+顾明思议，网关就是网络的关口。数据在网络间传输，从一个网络传输到另一网络时就需要经过网关来做数据的路由和转发以及数据安全的校验。
+更通俗的来讲，网关就像是以前园区传达室的大爷。
+- 外面的人要想进入园区，必须经过大爷的认可，如果你是不怀好意的人，肯定被直接拦截。
+- 外面的人要传话或送信，要找大爷。大爷帮你带给目标人。
+
+![](./pictures/SpringCloud/HouseGateway.png)
+
+现在，微服务网关就起到同样的作用。前端请求不能直接访问微服务，而是要请求网关：
+- 网关可以做安全控制，也就是登录身份校验，校验通过才放行
+- 通过认证后，网关再根据请求判断应该访问哪个微服务，将请求转发过去
+
+![](./pictures/SpringCloud/SpringCloudGateway.png)
+
+在SpringCloud当中，提供了两种网关实现方案：
+- ~~Netflix Zuul：早期实现，目前已经淘汰~~
+- SpringCloudGateway：基于Spring的WebFlux技术，完全支持响应式编程，吞吐能力更强
+
+## 快速入门
+
+接下来，我们先看下如何利用网关实现请求路由。由于网关本身也是一个独立的微服务，因此也需要创建一个模块开发功能。大概步骤如下：
+- 创建网关微服务
+- 引入SpringCloudGateway、NacosDiscovery依赖
+- 编写启动类
+- 配置网关路由
+
+**1.创建项目引入依赖**
+
+首先，我们要在hmall下创建一个新的module，命名为hm-gateway，作为网关微服务。
+
+在hm-gateway模块的pom.xml文件中引入依赖：
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>hmall</artifactId>
+        <groupId>com.heima</groupId>
+        <version>1.0.0</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>hm-gateway</artifactId>
+
+    <properties>
+        <maven.compiler.source>11</maven.compiler.source>
+        <maven.compiler.target>11</maven.compiler.target>
+    </properties>
+    <dependencies>
+        <!--common-->
+        <dependency>
+            <groupId>com.heima</groupId>
+            <artifactId>hm-common</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+        <!--网关-->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-gateway</artifactId>
+        </dependency>
+        <!--nacos discovery-->
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+        </dependency>
+        <!--负载均衡-->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-loadbalancer</artifactId>
+        </dependency>
+    </dependencies>
+    <build>
+        <finalName>${project.artifactId}</finalName>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+```
+
+**2.启动类**
+
+在hm-gateway模块的com.hmall.gateway包下新建一个启动类：
+
+```java
+package com.hmall.gateway;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class GatewayApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(GatewayApplication.class, args);
+    }
+}
+```
+
+**3.配置路由**
+
+接下来，在hm-gateway模块的resources目录新建一个application.yaml文件，内容如下：
+
+```yaml
+server:
+  port: 8080
+spring:
+  application:
+    name: gateway
+  cloud:
+    nacos:
+      server-addr: 192.168.150.101:8848
+    gateway:
+      routes:
+        - id: item # 路由规则id，自定义，唯一
+          uri: lb://item-service # 路由的目标服务，lb代表负载均衡，会从注册中心拉取服务列表
+          predicates: # 路由断言，判断当前请求是否符合当前规则，符合则路由到目标服务
+            - Path=/items/**,/search/** # 这里是以请求路径作为判断规则
+        - id: cart
+          uri: lb://cart-service
+          predicates:
+            - Path=/carts/**
+        - id: user
+          uri: lb://user-service
+          predicates:
+            - Path=/users/**,/addresses/**
+        - id: trade
+          uri: lb://trade-service
+          predicates:
+            - Path=/orders/**
+        - id: pay
+          uri: lb://pay-service
+          predicates:
+            - Path=/pay-orders/**
+```
+
+**4.测试**
+
+启动GatewayApplication，以 http://localhost:8080 拼接微服务接口路径来测试。例如：
+http://localhost:8080/items/page?pageNo=1&pageSize=1
+
+![](./pictures/SpringCloud/TestGateway.png)
+
+此时，启动UserApplication、CartApplication，然后打开前端页面，发现相关功能都可以正常访问了。
+
+## 路由过滤
+
+路由规则的定义语法如下：
+
+```yaml
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: item
+          uri: lb://item-service
+          predicates:
+            - Path=/items/**,/search/**
+```
+
+routes 属性含义如下：
+- id：路由的唯一标示
+- predicates：路由断言，其实就是匹配条件
+- uri：路由目标地址，lb://代表负载均衡，从注册中心获取目标微服务的实例列表，并且负载均衡选择一个访问。
+- filters：路由过滤条件，后面讲
+
+这里我们重点关注predicates，也就是路由断言。SpringCloudGateway中支持的断言类型有很多：
+
+| 名称        | 说明                           | 示例                                                                                                  |
+|-------------|--------------------------------|-------------------------------------------------------------------------------------------------------|
+| After       | 是某个时间点后的请求           | `After=2037-01-20T17:42:47.789-07:00[America/Denver]`                                                 |
+| Before      | 是某个时间点之前的请求         | `Before=2031-04-13T15:14:47.433+08:00[Asia/Shanghai]`                                                 |
+| Between     | 是某两个时间点之前的请求       | `Between=2037-01-20T17:42:47.789-07:00[America/Denver],2037-01-21T17:42:47.789-07:00[America/Denver]` |
+| Cookie      | 请求必须包含某些 cookie        | `Cookie=chocolate, ch.p`                                                                              |
+| Header      | 请求必须包含某些 header        | `Header=X-Request-Id, \d+`                                                                            |
+| Host        | 请求必须是访问某个 host（域名）| `Host=**.somehost.org, **.anotherhost.org`                                                            |
+| Method      | 请求方式必须是指定方式         | `Method=GET,POST`                                                                                     |
+| Path        | 请求路径必须符合指定规则       | `Path=/red/{segment},/blue/**`                                                                        |
+| Query       | 请求参数必须包含指定参数       | `Query=name` 或 `Query=name, Jack`                                                                    |
+| RemoteAddr  | 请求者的 IP 必须在指定范围     | `RemoteAddr=192.168.1.1/24`                                                                           |
+| weight      | 权重处理                       | —                                                                                                     |
+
+## 网关登录校验
+
+单体架构时我们只需要完成一次用户登录、身份校验，就可以在所有业务中获取到用户信息。而微服务拆分后，每个微服务都独立部署，不再共享数据。也就意味着每个微服务都需要做登录校验，这显然不可取。
+
+### 鉴权思路分析
+
+我们的登录是基于JWT来实现的，校验JWT的算法复杂，而且需要用到秘钥。如果每个微服务都去做登录校验，这就存在着两大问题：
+- 每个微服务都需要知道JWT的秘钥，不安全
+- 每个微服务重复编写登录校验代码、权限校验代码，麻烦
+
+既然网关是所有微服务的入口，一切请求都需要先经过网关。我们完全可以把登录校验的工作放到网关去做，这样之前说的问题就解决了：
+- 只需要在网关和用户服务保存秘钥
+- 只需要在网关开发登录校验功能
+
+此时，登录校验的流程如图：
+
+![](./pictures/SpringCloud/GatewayVerify.png)
+
+不过，这里存在几个问题：
+- 网关路由是配置的，请求转发是Gateway内部代码，我们如何在转发之前做登录校验？
+- 网关校验JWT之后，如何将用户信息传递给微服务？
+- 微服务之间也会相互调用，这种调用不经过网关，又该如何传递用户信息？
+
+### 网关过滤器
+
+网关中提供了33种路由过滤器，每种过滤器都有独特的作用：
+
+| 名称                   | 说明                         | 示例                                                                                   |
+|------------------------|------------------------------|----------------------------------------------------------------------------------------|
+| AddRequestHeader       | 给当前请求添加一个请求头     | `AddRequestHeader=headerName,headerValue`                                              |
+| RemoveRequestHeader    | 移除请求中的一个请求头       | `RemoveRequestHeader=headerName`                                                       |
+| AddResponseHeader      | 给响应结果中添加一个响应头   | `AddResponseHeader=headerName,headerValue`                                             |
+| RemoveResponseHeader   | 从响应结果中移除一个响应头   | `RemoveResponseHeader=headerName`                                                      |
+| RewritePath            | 请求路径重写                 | `RewritePath=/red/?(?<segment>.*), /$\{segment}`                                       |
+| StripPrefix            | 去除请求路径中的 N 段前缀    | `StripPrefix=1`（例如路径 `/a/b` 转发时只保留 `/b`）                                   |
+| ...                    | …                            | …                                                                                      |
+
+登录校验必须在请求转发到微服务之前做，否则就失去了意义。而网关的请求转发是Gateway内部代码实现的，要想在请求转发之前做登录校验，就必须了解Gateway内部工作的基本原理。
+
+![](./pictures/SpringCloud/RoutingFilter.png)
+
+如图所示：
+1. 客户端请求进入网关后由HandlerMapping对请求做判断，找到与当前请求匹配的路由规则（Route），然后将请求交给WebHandler去处理。
+2. WebHandler则会加载当前路由下需要执行的过滤器链（Filter chain），然后按照顺序逐一执行过滤器（后面称为Filter）。
+3. 图中Filter被虚线分为左右两部分，是因为Filter内部的逻辑分为pre和post两部分，分别会在请求路由到微服务之前和之后被执行。
+4. 只有所有Filter的pre逻辑都依次顺序执行通过后，请求才会被路由到微服务。
+5. 微服务返回结果后，再倒序执行Filter的post逻辑。
+6. 最终把响应结果返回。
+
+如图中所示，最终请求转发是有一个名为NettyRoutingFilter的过滤器来执行的，而且这个过滤器是整个过滤器链中顺序最靠后的一个。如果我们能够定义一个过滤器，在其中实现登录校验逻辑，并且将过滤器执行顺序定义到NettyRoutingFilter之前，这就符合我们的需求了！
+
+那么，该如何实现一个网关过滤器呢？
+网关过滤器链中的过滤器有两种：
+- GatewayFilter：路由过滤器，作用于任意指定路由；默认不生效，要配置到路由后生效。
+- GlobalFilter：全局过滤器，作用范围是所有路由；声明后自动生效。
+
+> 注意：过滤器链之外还有一种过滤器，HttpHeadersFilter，用来处理传递到下游微服务的请求头。例如org.springframework.cloud.gateway.filter.headers.XForwardedHeadersFilter可以传递代理请求原本的host头到下游微服务
+
+其实GatewayFilter和GlobalFilter这两种过滤器的方法签名完全一致：
+
+```java
+/**
+ * 处理请求并将其传递给下一个过滤器
+ * @param exchange 当前请求的上下文，其中包含request、response等各种数据
+ * @param chain 过滤器链，基于它向下传递请求
+ * @return 根据返回值标记当前请求是否被完成或拦截，chain.filter(exchange)就放行了。
+ */
+Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain);
+```
+
+FilteringWebHandler在处理请求时，会将GlobalFilter装饰为GatewayFilter，然后放到同一个过滤器链中，排序以后依次执行。
+
+Gateway内置的GatewayFilter过滤器使用起来非常简单，无需编码，只要在yaml文件中简单配置即可。而且其作用范围也很灵活，配置在哪个Route下，就作用于哪个Route.
+例如，有一个过滤器叫做AddRequestHeaderGatewayFilterFacotry，顾明思议，就是添加请求头的过滤器，可以给请求添加一个请求头并传递到下游微服务。
+使用的使用只需要在application.yaml中这样配置：
+
+```yaml
+spring:
+  cloud:
+    gateway:
+      routes:
+      - id: test_route
+        uri: lb://test-service
+        predicates:
+          -Path=/test/**
+        filters:
+          - AddRequestHeader=key, value # 逗号之前是请求头的key，逗号之后是value
+```
+
+如果想要让过滤器作用于所有的路由，则可以这样配置：
+
+```yaml
+spring:
+  cloud:
+    gateway:
+      default-filters: # default-filters下的过滤器可以作用于所有路由
+        - AddRequestHeader=key, value
+      routes:
+      - id: test_route
+        uri: lb://test-service
+        predicates:
+          -Path=/test/**
+```
+
+### 自定义过滤器
+
+无论是GatewayFilter还是GlobalFilter都支持自定义，只不过编码方式、使用方式略有差别。
+
+**1.自定义GatewayFilter**
+
+自定义GatewayFilter不是直接实现GatewayFilter，而是实现AbstractGatewayFilterFactory。最简单的方式是这样的：
+
+```java
+@Component
+public class PrintAnyGatewayFilterFactory extends AbstractGatewayFilterFactory<Object> {
+    @Override
+    public GatewayFilter apply(Object config) {
+        return new GatewayFilter() {
+            @Override
+            public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+                // 获取请求
+                ServerHttpRequest request = exchange.getRequest();
+                // 编写过滤器逻辑
+                System.out.println("过滤器执行了");
+                // 放行
+                return chain.filter(exchange);
+            }
+        };
+    }
+}
+```
+
+> 注意：该类的名称一定要以GatewayFilterFactory为后缀！
+
+然后在yaml配置中这样使用：
+
+```yaml
+spring:
+  cloud:
+    gateway:
+      default-filters:
+            - PrintAny # 此处直接以自定义的GatewayFilterFactory类名称前缀类声明过滤器
+```
+
+> 这种过滤器还可以支持动态配置参数，不过实现起来比较复杂。
+
+**2.自定义GlobalFilter**
+
+自定义GlobalFilter则简单很多，直接实现GlobalFilter即可，而且也无法设置动态参数：
+
+```java
+@Component
+public class PrintAnyGlobalFilter implements GlobalFilter, Ordered {
+    @Override
+    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        // 编写过滤器逻辑
+        System.out.println("未登录，无法访问");
+        // 放行
+        // return chain.filter(exchange);
+
+        // 拦截
+        ServerHttpResponse response = exchange.getResponse();
+        response.setRawStatusCode(401);
+        return response.setComplete();
+    }
+
+    @Override
+    public int getOrder() {
+        // 过滤器执行顺序，值越小，优先级越高
+        return 0;
+    }
+}
+```
+
+### 登录校验
+
+登录校验需要用到JWT，而且JWT的加密需要秘钥和加密工具。这些在hm-service中已经有了，我们直接拷贝过来：
+
+具体作用如下：
+- AuthProperties：配置登录校验需要拦截的路径，因为不是所有的路径都需要登录才能访问
+- JwtProperties：定义与JWT工具有关的属性，比如秘钥文件位置
+- SecurityConfig：工具的自动装配
+- JwtTool：JWT工具，其中包含了校验和解析token的功能
+- hmall.jks：秘钥文件
+
+其中AuthProperties和JwtProperties所需的属性要在application.yaml中配置：
+
+```yaml
+hm:
+  jwt:
+    location: classpath:hmall.jks # 秘钥地址
+    alias: hmall # 秘钥别名
+    password: hmall123 # 秘钥文件密码
+    tokenTTL: 30m # 登录有效期
+  auth:
+    excludePaths: # 无需登录校验的路径
+      - /search/**
+      - /users/login
+      - /items/**
+```
+
+接下来，我们定义一个登录校验的过滤器：
+
+```java
+@Component
+@RequiredArgsConstructor
+@EnableConfigurationProperties(AuthProperties.class)
+public class AuthGlobalFilter implements GlobalFilter, Ordered {
+
+    private final JwtTool jwtTool;
+
+    private final AuthProperties authProperties;
+
+    private final AntPathMatcher antPathMatcher = new AntPathMatcher();
+
+    @Override
+    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        // 1.获取Request
+        ServerHttpRequest request = exchange.getRequest();
+        // 2.判断是否不需要拦截
+        if(isExclude(request.getPath().toString())){
+            // 无需拦截，直接放行
+            return chain.filter(exchange);
+        }
+        // 3.获取请求头中的token
+        String token = null;
+        List<String> headers = request.getHeaders().get("authorization");
+        if (!CollUtils.isEmpty(headers)) {
+            token = headers.get(0);
+        }
+        // 4.校验并解析token
+        Long userId = null;
+        try {
+            userId = jwtTool.parseToken(token);
+        } catch (UnauthorizedException e) {
+            // 如果无效，拦截
+            ServerHttpResponse response = exchange.getResponse();
+            response.setRawStatusCode(401);
+            return response.setComplete();
+        }
+
+        // TODO 5.如果有效，传递用户信息
+        System.out.println("userId = " + userId);
+        // 6.放行
+        return chain.filter(exchange);
+    }
+
+    private boolean isExclude(String antPath) {
+        for (String pathPattern : authProperties.getExcludePaths()) {
+            if(antPathMatcher.match(pathPattern, antPath)){
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public int getOrder() {
+        return 0;
+    }
+}
+```
+
+### 微服务获取用户
+
+现在，网关已经可以完成登录校验并获取登录用户身份信息。但是当网关将请求转发到微服务时，微服务又该如何获取用户身份呢？
+
+由于网关发送请求到微服务依然采用的是Http请求，因此我们可以将用户信息以请求头的方式传递到下游微服务。然后微服务可以从请求头中获取登录用户信息。考虑到微服务内部可能很多地方都需要用到登录用户信息，因此我们可以利用SpringMVC的拦截器来实现登录用户信息获取，并存入ThreadLocal，方便后续使用。
+
+据图流程图如下：
+
+![](./pictures/SpringCloud/ShareUserinfo.png)
+
+因此，接下来我们要做的事情有：
+- 改造网关过滤器，在获取用户信息后保存到请求头，转发到下游微服务
+- 编写微服务拦截器，拦截请求获取用户信息，保存到ThreadLocal后放行
+
+**1.保存用户到请求头**
+
+首先，我们修改登录校验拦截器的处理逻辑，保存用户信息到请求头中：
+
+![](./pictures/SpringCloud/MutateRequest.png)
+
+**2.拦截器获取用户**
+
+由于每个微服务都有获取登录用户的需求，因此拦截器我们直接写在hm-common中，并写好自动装配。这样微服务只需要引入hm-common就可以直接具备拦截器功能，无需重复编写。
+
+我们在hm-common模块下定义一个拦截器：
+
+```java
+public class UserInfoInterceptor implements HandlerInterceptor {
+    @Override
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+        // 1.获取请求头中的用户信息
+        String userInfo = request.getHeader("user-info");
+        // 2.判断是否为空
+        if (StrUtil.isNotBlank(userInfo)) {
+            // 不为空，保存到ThreadLocal
+            UserContext.setUser(Long.valueOf(userInfo));
+        }
+        // 3.放行
+        return true;
+    }
+
+    @Override
+    public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) throws Exception {
+        // 移除用户
+        UserContext.removeUser();
+    }
+}
+```
+
+接着在hm-common模块下编写SpringMVC的配置类，配置登录拦截器：
+
+```java
+@Configuration
+@ConditionalOnClass(DispatcherServlet.class)
+public class MvcConfig implements WebMvcConfigurer {
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(new UserInfoInterceptor());
+    }
+}
+```
+
+不过，需要注意的是，这个配置类默认是**不会生效**的，因为它所在的包是com.hmall.common.config，与其它微服务的扫描包不一致，无法被扫描到，因此无法生效。
+基于SpringBoot的自动装配原理，我们要将其添加到resources目录下的META-INF/spring.factories文件中：
+
+![](./pictures/SpringCloud/AutoConfigMvcConfig.png)
+
+内容如下：
+
+```text
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+  com.hmall.common.config.MyBatisConfig,\
+  com.hmall.common.config.MvcConfig
+```
+
+这样就完成了为所有微服务拦截并保存用户信息的操作了。
+
+### OpenFeign传递用户
+
+前端发起的请求都会经过网关再到微服务，由于我们之前编写的过滤器和拦截器功能，微服务可以轻松获取登录用户信息。
+但有些业务是比较复杂的，请求到达微服务后还需要调用其它多个微服务。比如下单业务，流程如下：
+
+![](./pictures/SpringCloud/ShareUserinfo.png)
+
+下单的过程中，需要调用商品服务扣减库存，调用购物车服务清理用户购物车。而清理购物车时必须知道当前登录的用户身份。但是，订单服务调用购物车时并没有传递用户信息，购物车服务无法知道当前用户是谁。
+
+由于微服务获取用户信息是通过拦截器在请求头中读取，因此要想实现微服务之间的用户信息传递，就必须在微服务发起调用时把用户信息存入请求头。
+
+微服务之间调用是基于OpenFeign来实现的，并不是我们自己发送的请求。我们如何才能让每一个由OpenFeign发起的请求自动携带登录用户信息呢？
+这里要借助Feign中提供的一个拦截器接口：feign.RequestInterceptor
+
+```java
+public interface RequestInterceptor {
+  /**
+   * Called for every request. 
+   * Add data using methods on the supplied {@link RequestTemplate}.
+   */
+  void apply(RequestTemplate template);
+}
+```
+
+我们只需要实现这个接口，然后实现apply方法，利用RequestTemplate类来添加请求头，将用户信息保存到请求头中。这样以来，每次OpenFeign发起请求的时候都会调用该方法，传递用户信息。
+
+由于FeignClient全部都是在hm-api模块，因此我们在hm-api模块的com.hmall.api.config.DefaultFeignConfig中编写这个拦截器：
+
+在com.hmall.api.config.DefaultFeignConfig中添加一个Bean：
+
+```java
+@Bean
+public RequestInterceptor userInfoRequestInterceptor(){
+    return new RequestInterceptor() {
+        @Override
+        public void apply(RequestTemplate template) {
+            // 获取登录用户
+            Long userId = UserContext.getUser();
+            if(userId == null) {
+                // 如果为空则直接跳过
+                return;
+            }
+            // 如果不为空则放入请求头中，传递给下游微服务
+            template.header("user-info", userId.toString());
+        }
+    };
+}
+```
+
+现在微服务之间通过OpenFeign调用时也会传递登录用户信息了。
+
+# 配置管理
+
+到目前为止我们已经解决了微服务相关的几个问题：
+- 微服务远程调用
+- 微服务注册、发现
+- 微服务请求路由、负载均衡
+- 微服务登录用户信息传递
+
+不过，现在依然还有几个问题需要解决：
+- 网关路由在配置文件中写死了，如果变更必须重启微服务
+- 某些业务配置在配置文件中写死了，每次修改都要重启服务
+- 每个微服务都有很多重复的配置，维护成本高
+
+这些问题都可以通过统一的配置管理器服务解决。而Nacos不仅仅具备注册中心功能，也具备配置管理的功能：
+
+![](./pictures/SpringCloud/SettingCenter.png)
+
+微服务共享的配置可以统一交给Nacos保存和管理，在Nacos控制台修改配置后，Nacos会将配置变更推送给相关的微服务，并且无需重启即可生效，实现配置热更新。
+网关的路由同样是配置，因此同样可以基于这个功能实现动态路由功能，无需重启网关即可修改路由配置。
+
+## 配置共享
+
+我们可以把微服务共享的配置抽取到Nacos中统一管理，这样就不需要每个微服务都重复配置了。分为两步：
+- 在Nacos中添加共享配置
+- 微服务拉取配置
+
+**1.添加共享配置**
+
+以cart-service为例，我们看看有哪些配置是重复的，可以抽取的分别是：jdbc配置、日志配置和swagger和OpenFeign的配置。
+
+我们在nacos控制台分别添加这些配置。
+首先是jdbc相关配置，在配置管理->配置列表中点击+新建一个配置：
+
+![](./pictures/SpringCloud/SharedSetting.png)
+
+在弹出的表单中填写信息：
+
+![](./pictures/SpringCloud/AddNewSetting.png)
+
+其中详细的配置如下：
+
+```yaml
+spring:
+  datasource:
+    url: jdbc:mysql://${hm.db.host:192.168.150.101}:${hm.db.port:3306}/${hm.db.database}?useUnicode=true&characterEncoding=UTF-8&autoReconnect=true&serverTimezone=Asia/Shanghai
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: ${hm.db.un:root}
+    password: ${hm.db.pw:123}
+mybatis-plus:
+  configuration:
+    default-enum-type-handler: com.baomidou.mybatisplus.core.handlers.MybatisEnumTypeHandler
+  global-config:
+    db-config:
+      update-strategy: not_null
+      id-type: auto
+```
+
+注意这里的jdbc的相关参数并没有写死，例如：
+- 数据库ip：通过${hm.db.host:192.168.150.101}配置了默认值为192.168.150.101，同时允许通过${hm.db.host}来覆盖默认值
+- 数据库端口：通过${hm.db.port:3306}配置了默认值为3306，同时允许通过${hm.db.port}来覆盖默认值
+- 数据库database：可以通过${hm.db.database}来设定，无默认值
+
+然后是统一的日志配置，命名为shared-log.yaml，配置内容如下：
+
+```yaml
+logging:
+  level:
+    com.hmall: debug
+  pattern:
+    dateformat: HH:mm:ss:SSS
+  file:
+    path: "logs/${spring.application.name}"
+```
+
+然后是统一的swagger配置，命名为shared-swagger.yaml，配置内容如下：
+
+```yaml
+knife4j:
+  enable: true
+  openapi:
+    title: ${hm.swagger.title:黑马商城接口文档}
+    description: ${hm.swagger.description:黑马商城接口文档}
+    email: ${hm.swagger.email:zhanghuyi@itcast.cn}
+    concat: ${hm.swagger.concat:虎哥}
+    url: https://www.itcast.cn
+    version: v1.0.0
+    group:
+      default:
+        group-name: default
+        api-rule: package
+        api-rule-resources:
+          - ${hm.swagger.package}
+```
+
+注意，这里的swagger相关配置我们没有写死，例如：
+- title：接口文档标题，我们用了${hm.swagger.title}来代替，将来可以有用户手动指定
+- email：联系人邮箱，我们用了${hm.swagger.email:zhanghuyi@itcast.cn}，默认值是zhanghuyi@itcast.cn，同时允许用户利用${hm.swagger.email}来覆盖。
+
+**2.拉取共享配置**
+
+接下来，我们要在微服务拉取共享配置。将拉取到的共享配置与本地的application.yaml配置合并，完成项目上下文的初始化。
+不过，需要注意的是，读取Nacos配置是SpringCloud上下文（ApplicationContext）初始化时处理的，发生在项目的引导阶段。然后才会初始化SpringBoot上下文，去读取application.yaml。
+也就是说引导阶段，application.yaml文件尚未读取，根本不知道nacos 地址，该如何去加载nacos中的配置文件呢？
+
+SpringCloud在初始化上下文的时候会先读取一个名为bootstrap.yaml(或者bootstrap.properties)的文件，如果我们将nacos地址配置到bootstrap.yaml中，那么在项目引导阶段就可以读取nacos中的配置了。
+
+![](./pictures/SpringCloud/Merge2Yaml.png)
+
+因此，微服务整合Nacos配置管理的步骤如下：
+
+1）引入依赖：
+在cart-service模块引入依赖：
+
+```xml
+<!--nacos配置管理-->
+<dependency>
+    <groupId>com.alibaba.cloud</groupId>
+    <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
+</dependency>
+<!--读取bootstrap文件-->
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-bootstrap</artifactId>
+</dependency>
+```
+
+2）新建bootstrap.yaml
+在cart-service中的resources目录新建一个bootstrap.yaml文件。
+
+内容如下：
+
+```yaml
+spring:
+  application:
+    name: cart-service # 服务名称
+  profiles:
+    active: dev
+  cloud:
+    nacos:
+      server-addr: 192.168.150.101 # nacos地址
+      config:
+        file-extension: yaml # 文件后缀名
+        shared-configs: # 共享配置
+          - dataId: shared-jdbc.yaml # 共享mybatis配置
+          - dataId: shared-log.yaml # 共享日志配置
+          - dataId: shared-swagger.yaml # 共享日志配置
+```
+
+3）修改application.yaml
+由于一些配置挪到了bootstrap.yaml，因此application.yaml需要修改为：
+
+```yaml
+server:
+  port: 8082
+feign:
+  okhttp:
+    enabled: true # 开启OKHttp连接池支持
+hm:
+  swagger:
+    title: 购物车服务接口文档
+    package: com.hmall.cart.controller
+  db:
+    database: hm-cart
+```
+
+重启服务，发现所有配置都生效了。
+
+## 配置热更新
+
+有很多的业务相关参数，将来可能会根据实际情况临时调整。例如购物车业务，购物车数量有一个上限，默认是10，对应代码如下：
+
+![](./pictures/SpringCloud/CheckCartsFull.png)
+
+现在这里购物车是写死的固定值，我们应该将其配置在配置文件中，方便后期修改。
+但现在的问题是，即便写在配置文件中，修改了配置还是需要重新打包、重启服务才能生效。能不能不用重启，直接生效呢？
+这就要用到Nacos的配置热更新能力了，分为两步：
+- 在Nacos中添加配置
+- 在微服务读取配置
+
+**1.添加配置到Nacos**
+
+首先，我们在nacos中添加一个配置文件，将购物车的上限数量添加到配置中：
+
+![](./pictures/SpringCloud/ConfigMaxmount.png)
+
+注意文件的dataId格式：
+
+```text
+[服务名]-[spring.active.profile].[后缀名]
+```
+
+文件名称由三部分组成：
+- 服务名：我们是购物车服务，所以是cart-service
+- spring.active.profile：就是spring boot中的spring.active.profile，可以省略，则所有profile共享该配置
+- 后缀名：例如yaml
+
+这里我们直接使用cart-service.yaml这个名称，则不管是dev还是local环境都可以共享该配置。
+配置内容如下：
+
+```yaml
+hm:
+  cart:
+    maxAmount: 1 # 购物车商品数量上限
+```
+
+**2.配置热更新**
+
+接着，我们在微服务中读取配置，实现配置热更新。
+在cart-service中新建一个属性读取类：CartProperties.java
+
+```java
+package com.hmall.cart.config;
+
+import lombok.Data;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.stereotype.Component;
+
+@Data
+@Component
+@ConfigurationProperties(prefix = "hm.cart")
+public class CartProperties {
+    private Integer maxAmount;
+}
+```
+
+接着，在业务中使用该属性加载类：
+
+![](./pictures/SpringCloud/TestHotUpdate.png)
+
+启动后，我们在nacos控制台，将购物车上限配置为其它数字，无需重启服务，配置热更新就生效了。
+
+# 微服务保护 Sentinel
+
+假如商品服务业务并发较高，占用过多Tomcat连接。可能会导致商品服务的所有接口响应时间增加，延迟变高，甚至是长时间阻塞直至查询失败。
+此时查询购物车业务需要查询并等待商品查询结果，从而导致查询购物车列表业务的响应时间也变长，甚至也阻塞直至无法访问。而此时如果查询购物车的请求较多，可能导致购物车服务的Tomcat连接占用较多，所有接口的响应时间都会增加，整个服务性能很差， 甚至不可用。
+
+![](./pictures/SpringCloud/Snowslide.png)
+
+依次类推，整个微服务群中与购物车服务、商品服务等有调用关系的服务可能都会出现问题，最终导致整个集群不可用。
+
+这就是级联失败问题，或者叫**雪崩问题**。
+
+## 服务保护方案
+
+微服务保护的方案有很多，比如：
+- 请求限流
+- 线程隔离
+- 服务熔断
+
+这些方案或多或少都会导致服务的体验上略有下降，比如请求限流，降低了并发上限；线程隔离，降低了可用资源数量；服务熔断，降低了服务的完整度，部分服务变的不可用或弱可用。因此这些方案都属于服务降级的方案。但通过这些方案，服务的健壮性得到了提升，接下来，我们就逐一了解这些方案的原理。
+
+**1.请求限流**
+
+服务故障最重要原因，就是并发太高！解决了这个问题，就能避免大部分故障。当然，接口的并发不是一直很高，而是突发的。因此请求限流，就是限制或控制接口访问的并发流量，避免服务因流量激增而出现故障。
+
+请求限流往往会有一个限流器，数量高低起伏的并发请求曲线，经过限流器就变的非常平稳。这就像是水电站的大坝，起到蓄水的作用，可以通过开关控制水流出的大小，让下游水流始终维持在一个平稳的量。
+
+![](./pictures/SpringCloud/Current-limiting.png)
+
+**2.线程隔离**
+
+当一个业务接口响应时间长，而且并发高时，就可能耗尽服务器的线程资源，导致服务内的其它接口受到影响。所以我们必须把这种影响降低，或者缩减影响的范围。线程隔离正是解决这个问题的好办法。
+
+线程隔离的思想来自轮船的舱壁模式：轮船的船舱会被隔板分割为N个相互隔离的密闭舱，假如轮船触礁进水，只有损坏的部分密闭舱会进水，而其他舱由于相互隔离，并不会进水。这样就把进水控制在部分船体，避免了整个船舱进水而沉没。
+
+为了避免某个接口故障或压力过大导致整个服务不可用，我们可以限定每个接口可以使用的资源范围，也就是将其“隔离”起来。
+
+![](./pictures/SpringCloud/ThreadIsolation.png)
+
+如图所示，我们给查询购物车业务限定可用线程数量上限为20，这样即便查询购物车的请求因为查询商品服务而出现故障，也不会导致服务器的线程资源被耗尽，不会影响到其它接口。
+
+**3.服务熔断**
+
+线程隔离虽然避免了雪崩问题，但故障服务（商品服务）依然会拖慢购物车服务（服务调用方）的接口响应速度。而且商品查询的故障依然会导致查询购物车功能出现故障，购物车业务也变的不可用了。
+
+所以，我们要做两件事情：
+- 编写服务降级逻辑：就是服务调用失败后的处理逻辑，根据业务场景，可以抛出异常，也可以返回友好提示或默认数据。
+- 异常统计和熔断：统计服务提供方的异常比例，当比例过高表明该接口会影响到其它服务，应该拒绝调用该接口，而是直接走降级逻辑。
+
+## Sentinel
+
+**1.介绍和安装**
+
+Sentinel是阿里巴巴开源的一款服务保护框架，目前已经加入SpringCloudAlibaba中。官方网站：https://sentinelguard.io/zh-cn/ 。
+
+Sentinel 的使用可以分为两个部分:
+- 核心库（Jar包）：不依赖任何框架/库，能够运行于 Java 8 及以上的版本的运行时环境，同时对 Dubbo / Spring Cloud 等框架也有较好的支持。在项目中引入依赖即可实现服务限流、隔离、熔断等功能。
+- 控制台（Dashboard）：Dashboard 主要负责管理推送规则、监控、管理机器信息等。
+
+为了方便监控微服务，我们先把Sentinel的控制台搭建出来。
+
+1）下载jar包
+
+下载地址：https://github.com/alibaba/Sentinel/releases 。
+
+2）运行
+
+将jar包放在任意非中文、不包含特殊字符的目录下，重命名为sentinel-dashboard.jar：
+
+然后运行如下命令启动控制台：
+
+```bash
+java -Dserver.port=8090 -Dcsp.sentinel.dashboard.server=localhost:8090 -Dproject.name=sentinel-dashboard -jar sentinel-dashboard.jar
+```
+
+3）访问
+
+访问 http://localhost:8090 页面，就可以看到sentinel的控制台了：
+
+![](./pictures/SpringCloud/Sentinel.png)
+
+需要输入账号和密码，默认都是：sentinel
+登录后，即可看到控制台，默认会监控sentinel-dashboard服务本身。
+
+**2.微服务整合**
+
+我们在cart-service模块中整合sentinel，连接sentinel-dashboard控制台，步骤如下：
+
+1）引入sentinel依赖
+
+```xml
+<!--sentinel-->
+<dependency>
+    <groupId>com.alibaba.cloud</groupId> 
+    <artifactId>spring-cloud-starter-alibaba-sentinel</artifactId>
+</dependency>
+```
+
+2）配置控制台
+
+修改application.yaml文件，添加下面内容：
+
+```yaml
+spring:
+  cloud: 
+    sentinel:
+      transport:
+        dashboard: localhost:8090
+```
+
+3）访问cart-service的任意端点
+
+重启cart-service，然后访问查询购物车接口，sentinel的客户端就会将服务访问的信息提交到sentinel-dashboard控制台。并展示出统计信息。点击簇点链路菜单，会看到下面的页面：
+
+![](./pictures/SpringCloud/SentinelCartService.png)
+
+所谓簇点链路，就是单机调用链路，是一次请求进入服务后经过的每一个被Sentinel监控的资源。默认情况下，Sentinel会监控SpringMVC的每一个Endpoint（接口）。
+因此，我们看到/carts这个接口路径就是其中一个簇点，我们可以对其进行限流、熔断、隔离等保护措施。
+
+不过，需要注意的是，我们的SpringMVC接口是按照Restful风格设计，因此购物车的查询、删除、修改等接口全部都是/carts路径：
+
+![](./pictures/SpringCloud/RestfulCartService.png)
+
+默认情况下Sentinel会把路径作为簇点资源的名称，无法区分路径相同但请求方式不同的接口，查询、删除、修改等都被识别为一个簇点资源，这显然是不合适的。
+
+所以我们可以选择打开Sentinel的请求方式前缀，把请求方式 + 请求路径作为簇点资源名：
+首先，在cart-service的application.yml中添加下面的配置：
+
+```yaml
+spring:
+  cloud:
+    sentinel:
+      transport:
+        dashboard: localhost:8090
+      http-method-specify: true # 开启请求方式前缀
+```
+
+然后，重启服务，通过页面访问购物车的相关接口，可以看到sentinel控制台的簇点链路发生了变化:
+
+![](./pictures/SpringCloud/SentinelCartService2.png)
+
+## 请求限流
+
+在簇点链路后面点击流控按钮，即可对其做限流配置：
+
+![](./pictures/SpringCloud/cloud001.png)
+
+
+在弹出的菜单中这样填写：
+
+![](./pictures/SpringCloud/cloud002.png)
+
+这样就把查询购物车列表这个簇点资源的流量限制在了每秒6个，也就是最大QPS为6.
+
+我们利用Jemeter做限流测试，我们每秒发出10个请求：
+
+![](./pictures/SpringCloud/cloud003.png)
+
+最终监控结果如下：
+
+![](./pictures/SpringCloud/cloud004.png)
+
+可以看出GET:/carts这个接口的通过QPS稳定在6附近，而拒绝的QPS在4附近，符合我们的预期。
+
+
+## 线程隔离
+
+限流可以降低服务器压力，尽量减少因并发流量引起的服务故障的概率，但并不能完全避免服务故障。一旦某个服务出现故障，我们必须隔离对这个服务的调用，避免发生雪崩。
+
+比如，查询购物车的时候需要查询商品，为了避免因商品服务出现故障导致购物车服务级联失败，我们可以把购物车业务中查询商品的部分隔离起来，限制可用的线程资源：
+
+![](./pictures/SpringCloud/cloud005.png)
+
+这样，即便商品服务出现故障，最多导致查询购物车业务故障，并且可用的线程资源也被限定在一定范围，不会导致整个购物车服务崩溃。
+
+所以，我们要对查询商品的FeignClient接口做线程隔离。
+
+**1.OpenFeign整合Sentinel**
+
+修改cart-service模块的application.yml文件，开启Feign的sentinel功能：
+
+```java
+feign:
+  sentinel:
+    enabled: true # 开启feign对sentinel的支持
+```
+
+> 需要注意的是，默认情况下SpringBoot项目的tomcat最大线程数是200，允许的最大连接是8492，单机测试很难打满。
+
+所以我们需要配置一下cart-service模块的application.yml文件，修改tomcat连接：
+
+```java
+server:
+  port: 8082
+  tomcat:
+    threads:
+      max: 50 # 允许的最大线程数
+    accept-count: 50 # 最大排队等待数量
+    max-connections: 100 # 允许的最大连接
+```
+
+同时手动修改查询单个商品 ItemController 业务代码，以便于压测：
+```java
+@ApiOperation("根据id批量查询商品")
+@GetMapping
+public List<ItemDTO> queryItemByIds(@RequestParam("ids") List<Long> ids){
+    // TODO 模拟时间延迟
+    ThreadUtil.sleep(500);
+    return itemService.queryItemByIds(ids);
+}
+```
+
+然后重启cart-service服务，可以看到查询商品的FeignClient自动变成了一个簇点资源：
+
+![](./pictures/SpringCloud/cloud006.png)
+
+**2.配置线程隔离**
+
+接下来，点击查询商品的FeignClient对应的簇点资源后面的流控按钮：
+
+![](./pictures/SpringCloud/cloud007.png)
+
+在弹出的表单中填写下面内容：
+
+![](./pictures/SpringCloud/cloud008.png)
+
+注意，这里勾选的是并发线程数限制，也就是说这个查询功能最多使用5个线程，而不是5QPS。如果查询商品的接口每秒处理2个请求，则5个线程的实际QPS在10左右，而超出的请求自然会被拒绝。
+
+我们利用Jemeter测试，每秒发送100个请求：
+
+![](./pictures/SpringCloud/cloud009.png)
+
+最终测试结果如下：
+
+![](./pictures/SpringCloud/cloud010.png)
+
+进入查询购物车的请求每秒大概在100，而在查询商品时却只剩下每秒10左右，符合我们的预期。
+
+此时如果我们通过页面访问购物车的其它接口，例如添加购物车、修改购物车商品数量，发现不受影响：
+
+![](./pictures/SpringCloud/cloud011.png)
+
+响应时间非常短，这就证明线程隔离起到了作用，尽管查询购物车这个接口并发很高，但是它能使用的线程资源被限制了，因此不会影响到其它接口。
+
+## 服务熔断
+
+**1.编写降级逻辑**
+
+触发限流或熔断后的请求不一定要直接报错，也可以返回一些默认数据或者友好提示，用户体验会更好。
+给FeignClient编写失败后的降级逻辑有两种方式：
+- 方式一：FallbackClass，无法对远程调用的异常做处理
+- 方式二：FallbackFactory，可以对远程调用的异常做处理，我们一般选择这种方式。
+
+这里我们演示方式二的失败降级处理。
+
+**步骤一**：在hm-api模块中给ItemClient定义降级处理类，实现FallbackFactory：
+
+![](./pictures/SpringCloud/cloud012.png)
+
+代码如下：
+
+```java
+@Slf4j
+public class ItemClientFallback implements FallbackFactory<ItemClient> {
+    @Override
+    public ItemClient create(Throwable cause) {
+        return new ItemClient() {
+            @Override
+            public List<ItemDTO> queryItemByIds(Collection<Long> ids) {
+                log.error("远程调用ItemClient#queryItemByIds方法出现异常，参数：{}", ids, cause);
+                // 查询购物车允许失败，查询失败，返回空集合
+                return CollUtils.emptyList();
+            }
+
+            @Override
+            public void deductStock(List<OrderDetailDTO> items) {
+                // 库存扣减业务需要触发事务回滚，查询失败，抛出异常
+                throw new BizIllegalException(cause);
+            }
+        };
+    }
+}
+```
+
+**步骤二**：在hm-api模块中的com.hmall.api.config.DefaultFeignConfig类中将ItemClientFallback注册为一个Bean：
+
+![](./pictures/SpringCloud/cloud013.png)
+
+**步骤三**：在hm-api模块中的ItemClient接口中使用ItemClientFallbackFactory：
+
+![](./pictures/SpringCloud/cloud014.png)
+
+重启后，再次测试，发现被限流的请求不再报错，走了降级逻辑：
+
+![](./pictures/SpringCloud/cloud015.png)
+
+但是未被限流的请求延时依然很高：
+
+![](./pictures/SpringCloud/cloud016.png)
+
+导致最终的平局响应时间较长。
+
+**2.服务熔断**
+
+
+
+
+
+
+
+

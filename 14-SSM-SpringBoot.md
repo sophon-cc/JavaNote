@@ -502,6 +502,8 @@ public class CouponService {
     ```imports
     com.robotspringbootstarter.RobotAutoConfiguration
     ```
+    > 操作方式为：在 resources 文件夹下建一个 spring 文件夹，spring 文件夹下建一个文件，文件名为 `org.springframework.boot.autoconfigure.AutoConfiguration.imports` 。
+
 3. 项目启动，自动加载我们的自动配置类
 
 > 这个阶段其它项目使用自定义场景，只需要导入自定义场景。
