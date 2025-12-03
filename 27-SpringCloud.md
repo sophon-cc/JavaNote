@@ -1473,10 +1473,438 @@ public class ItemClientFallback implements FallbackFactory<ItemClient> {
 
 **2.服务熔断**
 
+查询商品的RT较高（模拟的500ms），从而导致查询购物车的RT也变的很长。这样不仅拖慢了购物车服务，消耗了购物车服务的更多资源，而且用户体验也很差。
+对于商品服务这种不太健康的接口，我们应该停止调用，直接走降级逻辑，避免影响到当前服务。也就是将商品查询接口熔断。当商品服务接口恢复正常后，再允许调用。这其实就是断路器的工作模式了。
+
+Sentinel中的断路器不仅可以统计某个接口的慢请求比例，还可以统计异常请求比例。当这些比例超出阈值时，就会熔断该接口，即拦截访问该接口的一切请求，降级处理；当该接口恢复正常时，再放行对于该接口的请求。
+断路器的工作状态切换有一个状态机来控制：
+
+![](./pictures/SpringCloud/cloud017.png)
+
+状态机包括三个状态：
+- closed：关闭状态，断路器放行所有请求，并开始统计异常比例、慢请求比例。超过阈值则切换到open状态
+- open：打开状态，服务调用被熔断，访问被熔断服务的请求会被拒绝，快速失败，直接走降级逻辑。Open状态持续一段时间后会进入half-open状态
+- half-open：半开状态，放行一次请求，根据执行结果来判断接下来的操作。 
+  - 请求成功：则切换到closed状态
+  - 请求失败：则切换到open状态
+
+我们可以在控制台通过点击簇点后的熔断按钮来配置熔断策略：
+
+![](./pictures/SpringCloud/cloud018.png)
+
+在弹出的表格中这样填写：
+
+![](./pictures/SpringCloud/cloud019.png)
+
+这种是按照慢调用比例来做熔断，上述配置的含义是：
+- RT超过200毫秒的请求调用就是慢调用
+- 统计最近1000ms内的最少5次请求，如果慢调用比例不低于0.5，则触发熔断
+- 熔断持续时长20s
+
+配置完成后，再次利用Jemeter测试，可以发现：
+
+![](./pictures/SpringCloud/cloud020.png)
+
+在一开始一段时间是允许访问的，后来触发熔断后，查询商品服务的接口通过QPS直接为0，所有请求都被熔断了。而查询购物车的本身并没有受到影响。
+此时整个购物车查询服务的平均RT影响不大：
+
+![](./pictures/SpringCloud/cloud021.png)
 
 
+# 分布式事务 Seata
+
+首先我们看看项目中的下单业务整体流程：
+
+![](./pictures/SpringCloud/cloud022.png)
+
+由于订单、购物车、商品分别在三个不同的微服务，而每个微服务都有自己独立的数据库，因此下单过程中就会跨多个数据库完成业务。而每个微服务都会执行自己的本地事务：
+- 交易服务：下单事务
+- 购物车服务：清理购物车事务
+- 库存服务：扣减库存事务
+
+整个业务中，各个本地事务是有关联的。因此每个微服务的本地事务，也可以称为分支事务。多个有关联的分支事务一起就组成了全局事务。我们必须保证整个全局事务同时成功或失败。
+
+参与事务的多个子业务在不同的微服务，跨越了不同的数据库。虽然每个单独的业务都能在本地遵循ACID，但是它们互相之间没有感知，不知道有人失败了，无法保证最终结果的统一，也就无法遵循ACID的事务特性了。
+这就是分布式事务问题，出现以下情况之一就可能产生分布式事务问题：
+- 业务跨多个服务实现
+- 业务跨多个数据源实现
+
+## Seata 简介
+
+解决分布式事务的方案有很多，但实现起来都比较复杂，因此我们一般会使用开源的框架来解决分布式事务问题。在众多的开源分布式事务框架中，功能最完善、使用最多的就是阿里巴巴在2019年开源的[Seata](https://seata.apache.org/zh-cn/docs/overview/what-is-seata/)了。
+
+其实分布式事务产生的一个重要原因，就是参与事务的多个分支事务互相无感知，不知道彼此的执行状态。因此解决分布式事务的思想非常简单：
+就是找一个统一的**事务协调者**，与多个分支事务通信，检测每个分支事务的执行状态，保证全局事务下的每一个分支事务同时成功或失败即可。大多数的分布式事务框架都是基于这个理论来实现的。
+
+Seata也不例外，在Seata的事务管理中有三个重要的角色：
+- **TC (Transaction Coordinator) - 事务协调者**：维护全局和分支事务的状态，协调全局事务提交或回滚。 
+- **TM (Transaction Manager) - 事务管理器**：定义全局事务的范围、开始全局事务、提交或回滚全局事务。 
+- **RM (Resource Manager) - 资源管理器**：管理分支事务，与TC交谈以注册分支事务和报告分支事务的状态，并驱动分支事务提交或回滚。 
+
+Seata的工作架构如图所示：
+
+![](./pictures/SpringCloud/cloud023.png)
+
+其中，TM和RM可以理解为Seata的客户端部分，引入到参与事务的微服务依赖中即可。将来TM和RM就会协助微服务，实现本地分支事务与TC之间交互，实现事务的提交或回滚。
+
+而TC服务则是事务协调中心，是一个独立的微服务，需要单独部署。
+
+## 部署TC服务
+
+**1.准备数据库表**
+
+Seata支持多种存储模式，但考虑到持久化的需要，我们一般选择基于数据库存储。执行课前资料提供的 seata-tc.sql，导入数据库表：
+
+```sql
+CREATE DATABASE IF NOT EXISTS `seata`;
+USE `seata`;
 
 
+CREATE TABLE IF NOT EXISTS `global_table`
+(
+    `xid`                       VARCHAR(128) NOT NULL,
+    `transaction_id`            BIGINT,
+    `status`                    TINYINT      NOT NULL,
+    `application_id`            VARCHAR(32),
+    `transaction_service_group` VARCHAR(32),
+    `transaction_name`          VARCHAR(128),
+    `timeout`                   INT,
+    `begin_time`                BIGINT,
+    `application_data`          VARCHAR(2000),
+    `gmt_create`                DATETIME,
+    `gmt_modified`              DATETIME,
+    PRIMARY KEY (`xid`),
+    KEY `idx_status_gmt_modified` (`status` , `gmt_modified`),
+    KEY `idx_transaction_id` (`transaction_id`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4;
 
 
+CREATE TABLE IF NOT EXISTS `branch_table`
+(
+    `branch_id`         BIGINT       NOT NULL,
+    `xid`               VARCHAR(128) NOT NULL,
+    `transaction_id`    BIGINT,
+    `resource_group_id` VARCHAR(32),
+    `resource_id`       VARCHAR(256),
+    `branch_type`       VARCHAR(8),
+    `status`            TINYINT,
+    `client_id`         VARCHAR(64),
+    `application_data`  VARCHAR(2000),
+    `gmt_create`        DATETIME(6),
+    `gmt_modified`      DATETIME(6),
+    PRIMARY KEY (`branch_id`),
+    KEY `idx_xid` (`xid`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4;
 
+
+CREATE TABLE IF NOT EXISTS `lock_table`
+(
+    `row_key`        VARCHAR(128) NOT NULL,
+    `xid`            VARCHAR(128),
+    `transaction_id` BIGINT,
+    `branch_id`      BIGINT       NOT NULL,
+    `resource_id`    VARCHAR(256),
+    `table_name`     VARCHAR(32),
+    `pk`             VARCHAR(36),
+    `status`         TINYINT      NOT NULL DEFAULT '0' COMMENT '0:locked ,1:rollbacking',
+    `gmt_create`     DATETIME,
+    `gmt_modified`   DATETIME,
+    PRIMARY KEY (`row_key`),
+    KEY `idx_status` (`status`),
+    KEY `idx_branch_id` (`branch_id`),
+    KEY `idx_xid_and_branch_id` (`xid` , `branch_id`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `distributed_lock`
+(
+    `lock_key`       CHAR(20) NOT NULL,
+    `lock_value`     VARCHAR(20) NOT NULL,
+    `expire`         BIGINT,
+    primary key (`lock_key`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4;
+
+INSERT INTO `distributed_lock` (lock_key, lock_value, expire) VALUES ('AsyncCommitting', ' ', 0);
+INSERT INTO `distributed_lock` (lock_key, lock_value, expire) VALUES ('RetryCommitting', ' ', 0);
+INSERT INTO `distributed_lock` (lock_key, lock_value, expire) VALUES ('RetryRollbacking', ' ', 0);
+INSERT INTO `distributed_lock` (lock_key, lock_value, expire) VALUES ('TxTimeoutCheck', ' ', 0);
+```
+
+**2.Docker 部署**
+
+课前资料准备了一个seata目录，其中包含了seata运行时所需要的配置文件：
+
+其中包含中文注释，大家可以自行阅读。
+我们将整个seata文件夹拷贝到虚拟机的/root目录：
+
+![](./pictures/SpringCloud/cloud024.png)
+
+需要注意，要确保nacos、mysql都在hm-net网络中。如果某个容器不再hm-net网络，可以参考下面的命令将某容器加入指定网络：
+
+```bash
+docker network connect [网络名] [容器名]
+```
+
+```bash
+docker run --name seata \
+-p 8099:8099 \
+-p 7099:7099 \
+-e SEATA_IP=192.168.150.101 \
+-v ./seata:/seata-server/resources \
+--privileged=true \
+--network hm-net \
+-d \
+seataio/seata-server:1.5.2
+```
+
+**3.微服务集成Seata**
+
+参与分布式事务的每一个微服务都需要集成Seata，我们以trade-service为例。
+
+**3.1.引入依赖**
+
+为了方便各个微服务集成seata，我们需要把seata配置共享到nacos，因此trade-service模块不仅仅要引入seata依赖，还要引入nacos依赖:
+
+```xml
+<!--统一配置管理-->
+<dependency>
+    <groupId>com.alibaba.cloud</groupId>
+    <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
+</dependency>
+<!--读取bootstrap文件-->
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-bootstrap</artifactId>
+</dependency>
+<!--seata-->
+<dependency>
+    <groupId>com.alibaba.cloud</groupId>
+    <artifactId>spring-cloud-starter-alibaba-seata</artifactId>
+</dependency>
+```
+
+3.2.改造配置
+
+首先在nacos上添加一个共享的seata配置，命名为shared-seata.yaml：
+
+![](./pictures/SpringCloud/cloud025.png)
+
+内容如下：
+
+```yaml
+seata:
+  registry: # TC服务注册中心的配置，微服务根据这些信息去注册中心获取tc服务地址
+    type: nacos # 注册中心类型 nacos
+    nacos:
+      server-addr: 192.168.150.101:8848 # nacos地址
+      namespace: "" # namespace，默认为空
+      group: DEFAULT_GROUP # 分组，默认是DEFAULT_GROUP
+      application: seata-server # seata服务名称
+      username: nacos
+      password: nacos
+  tx-service-group: hmall # 事务组名称
+  service:
+    vgroup-mapping: # 事务组与tc集群的映射关系
+      hmall: "default"
+```
+
+然后，改造trade-service模块，添加bootstrap.yaml：
+
+![](./pictures/SpringCloud/cloud026.png)
+
+内容如下:
+
+```yaml
+spring:
+  application:
+    name: trade-service # 服务名称
+  profiles:
+    active: dev
+  cloud:
+    nacos:
+      server-addr: 192.168.150.101 # nacos地址
+      config:
+        file-extension: yaml # 文件后缀名
+        shared-configs: # 共享配置
+          - dataId: shared-jdbc.yaml # 共享mybatis配置
+          - dataId: shared-log.yaml # 共享日志配置
+          - dataId: shared-swagger.yaml # 共享日志配置
+          - dataId: shared-seata.yaml # 共享seata配置
+```
+
+可以看到这里加载了共享的seata配置。
+然后改造application.yaml文件，内容如下：
+
+```yaml
+server:
+  port: 8085
+feign:
+  okhttp:
+    enabled: true # 开启OKHttp连接池支持
+  sentinel:
+    enabled: true # 开启Feign对Sentinel的整合
+hm:
+  swagger:
+    title: 交易服务接口文档
+    package: com.hmall.trade.controller
+  db:
+    database: hm-trade
+```
+
+参考上述办法分别改造hm-cart和hm-item两个微服务模块。
+
+## XA模式
+Seata支持四种不同的分布式事务解决方案：
+- XA
+- TCC
+- AT
+- SAGA
+
+这里我们以XA模式和AT模式来给大家讲解其实现原理。
+
+XA 规范 是 X/Open 组织定义的分布式事务处理（DTP，Distributed Transaction Processing）标准，XA 规范 描述了全局的TM与局部的RM之间的接口，几乎所有主流的数据库都对 XA 规范 提供了支持。
+
+**1.Seata的XA模型**
+
+Seata对原始的XA模式做了简单的封装和改造，以适应自己的事务模型，基本架构如图：
+
+![](./pictures/SpringCloud/cloud027.png)
+
+RM一阶段的工作：
+1. 注册分支事务到TC
+2. 执行分支业务sql但不提交
+3. 报告执行状态到TC
+
+TC二阶段的工作：
+1. TC检测各分支事务执行状态
+  1. 如果都成功，通知所有RM提交事务
+  2. 如果有失败，通知所有RM回滚事务 
+
+RM二阶段的工作：
+- 接收TC指令，提交或回滚事务
+
+**2.实现步骤**
+
+首先，我们要在配置文件中指定要采用的分布式事务模式。我们可以在Nacos中的共享shared-seata.yaml配置文件中设置：
+
+```yaml
+seata:
+  data-source-proxy-mode: XA
+```
+
+其次，我们要利用@GlobalTransactional标记分布式事务的入口方法：
+
+![](./pictures/SpringCloud/cloud028.png)
+
+**3.优缺点**
+
+XA模式的优点是什么？
+- 事务的强一致性，满足ACID原则
+- 常用数据库都支持，实现简单，并且没有代码侵入
+
+XA模式的缺点是什么？
+- 因为一阶段需要锁定数据库资源，等待二阶段结束才释放，性能较差
+- 依赖关系型数据库实现事务
+
+## AT模式
+
+AT模式同样是分阶段提交的事务模型，不过缺弥补了XA模型中资源锁定周期过长的缺陷。
+
+**1.Seata的AT模型**
+
+基本流程图：
+
+![](./pictures/SpringCloud/cloud029.png)
+
+阶段一RM的工作：
+- 注册分支事务
+- 记录undo-log（数据快照）
+- 执行业务sql并提交
+- 报告事务状态
+
+阶段二提交时RM的工作：
+- 删除undo-log即可
+
+阶段二回滚时RM的工作：
+- 根据undo-log恢复数据到更新前
+
+**2.实现步骤**
+
+首先，为每个微服务数据库添加 `undo_log` 表：
+
+```java
+USE `hm-trade`;
+
+-- for AT mode you must to init this sql for you business database. the seata server not need it.
+CREATE TABLE IF NOT EXISTS `undo_log`
+(
+    `branch_id`     BIGINT       NOT NULL COMMENT 'branch transaction id',
+    `xid`           VARCHAR(128) NOT NULL COMMENT 'global transaction id',
+    `context`       VARCHAR(128) NOT NULL COMMENT 'undo_log context,such as serialization',
+    `rollback_info` LONGBLOB     NOT NULL COMMENT 'rollback info',
+    `log_status`    INT(11)      NOT NULL COMMENT '0:normal status,1:defense status',
+    `log_created`   DATETIME(6)  NOT NULL COMMENT 'create datetime',
+    `log_modified`  DATETIME(6)  NOT NULL COMMENT 'modify datetime',
+    UNIQUE KEY `ux_undo_log` (`xid`, `branch_id`)
+) ENGINE = InnoDB
+  AUTO_INCREMENT = 1
+  DEFAULT CHARSET = utf8mb4 COMMENT ='AT transaction mode undo table';
+```
+
+其次，我们要在配置文件中指定要采用的分布式事务模式。我们可以在Nacos中的共享shared-seata.yaml配置文件中设置：
+
+```yaml
+seata:
+  data-source-proxy-mode: AT
+```
+
+最后，我们要利用@GlobalTransactional标记分布式事务的入口方法。
+
+**3.流程梳理**
+
+我们用一个真实的业务来梳理下AT模式的原理。
+比如，现在有一个数据库表，记录用户余额：
+
+| id | money |
+| -- |  --   |
+| 1  |  100  |
+
+其中一个分支业务要执行的SQL为：
+
+```sql
+ update tb_account set money = money - 10 where id = 1
+```
+
+AT模式下，当前分支事务执行流程如下：
+一阶段：
+1. TM发起并注册全局事务到TC
+2. TM调用分支事务
+3. 分支事务准备执行业务SQL
+4. RM拦截业务SQL，根据where条件查询原始数据，形成快照。
+
+```json
+{
+  "id": 1, "money": 100
+}
+```
+
+5. RM执行业务SQL，提交本地事务，释放数据库锁。此时 money = 90
+6. RM报告本地事务状态给TC
+
+二阶段：
+1. TM通知TC事务结束
+2. TC检查分支事务状态
+  1. 如果都成功，则立即删除快照
+  2. 如果有分支事务失败，需要回滚。读取快照数据（{"id": 1, "money": 100}），将快照恢复到数据库。此时数据库再次恢复为100
+
+**4.AT与XA的区别**
+
+简述AT模式与XA模式最大的区别是什么？
+- XA模式一阶段不提交事务，锁定资源；AT模式一阶段直接提交，不锁定资源。
+- XA模式依赖数据库机制实现回滚；AT模式利用数据快照实现数据回滚。
+- XA模式强一致；AT模式最终一致
+
+可见，AT模式使用起来更加简单，无业务侵入，性能更好。因此企业90%的分布式事务都可以用AT模式来解决。
