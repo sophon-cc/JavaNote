@@ -1,3 +1,5 @@
+[toc]
+
 # SpringBoot 特性
 > 约定大于配置
 > 框架的框架：快速整合，快速部署
@@ -502,7 +504,7 @@ public class CouponService {
     ```imports
     com.robotspringbootstarter.RobotAutoConfiguration
     ```
-    > 操作方式为：在 resources 文件夹下建一个 spring 文件夹，spring 文件夹下建一个文件，文件名为 `org.springframework.boot.autoconfigure.AutoConfiguration.imports` 。
+    > 操作方式为：在 resources 文件夹下建一个 META-INF 文件夹，下再建一个 spring 文件夹，spring 文件夹下建一个文件，文件名为 `org.springframework.boot.autoconfigure.AutoConfiguration.imports` 。
 
 3. 项目启动，自动加载我们的自动配置类
 

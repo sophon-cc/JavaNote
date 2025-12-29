@@ -337,7 +337,7 @@ private void unlock(String key) {
  public Shop queryWithMutex(Long id)  {
         String key = CACHE_SHOP_KEY + id;
         // 1、从redis中查询商铺缓存
-        String shopJson = stringRedisTemplate.opsForValue().get("key");
+        String shopJson = stringRedisTemplate.opsForValue().get(key);
         // 2、判断是否存在
         if (StrUtil.isNotBlank(shopJson)) {
             // 存在,直接返回
@@ -380,11 +380,9 @@ private void unlock(String key) {
             }
             //6.写入redis
             stringRedisTemplate.opsForValue().set(key,JSONUtil.toJsonStr(shop),CACHE_NULL_TTL,TimeUnit.MINUTES);
-
-        }catch (Exception e){
+        } catch (Exception e){
             throw new RuntimeException(e);
-        }
-        finally {
+        } finally {
             //7.释放互斥锁
             unlock(lockKey);
         }
@@ -436,7 +434,7 @@ public Shop queryWithLogicalExpire( Long id ) {
     String json = stringRedisTemplate.opsForValue().get(key);
     // 2.判断是否存在
     if (StrUtil.isBlank(json)) {
-        // 3.存在，直接返回
+        // 3.不存在，直接返回
         return null;
     }
     // 4.命中，需要先把json反序列化为对象
@@ -855,7 +853,7 @@ tb_seckill_voucher：优惠券的库存、开始抢购时间，结束抢购时�
 
 而代金券由于优惠力度大，所以像第二种卷，就得限制数量，从表结构上也能看出，特价卷除了具有优惠卷的基本信息以外，还具有库存，抢购时间，结束时间等等字段
 
-**新增普通卷代码：  **VoucherController
+**新增普通卷代码：** VoucherController
 
 ```java
 @PostMapping
@@ -1562,11 +1560,11 @@ lua脚本本身并不需要大家花费太多时间去研究，只需要知道�
 
 ```java
 private static final DefaultRedisScript<Long> UNLOCK_SCRIPT;
-    static {
-        UNLOCK_SCRIPT = new DefaultRedisScript<>();
-        UNLOCK_SCRIPT.setLocation(new ClassPathResource("unlock.lua"));
-        UNLOCK_SCRIPT.setResultType(Long.class);
-    }
+static {
+    UNLOCK_SCRIPT = new DefaultRedisScript<>();
+    UNLOCK_SCRIPT.setLocation(new ClassPathResource("unlock.lua"));
+    UNLOCK_SCRIPT.setResultType(Long.class);
+}
 
 public void unlock() {
     // 调用lua脚本
@@ -1739,7 +1737,7 @@ public Result seckillVoucher(Long voucherId) {
 
 **ARGV[1]：  锁失效时间**
 
-**ARGV[2]：  id + ":" + threadId; 锁的小key**
+**ARGV[2]：  id + ":" + threadId。锁的小key**
 
 exists: 判断数据是否存在  name：是lock是否存在,如果==0，就表示当前这把锁不存在
 
@@ -1765,16 +1763,16 @@ redis.call('hincrby', KEYS[1], ARGV[2], 1)
 
 ```lua
 "if (redis.call('exists', KEYS[1]) == 0) then " +
-                  "redis.call('hset', KEYS[1], ARGV[2], 1); " +
-                  "redis.call('pexpire', KEYS[1], ARGV[1]); " +
-                  "return nil; " +
-              "end; " +
-              "if (redis.call('hexists', KEYS[1], ARGV[2]) == 1) then " +
-                  "redis.call('hincrby', KEYS[1], ARGV[2], 1); " +
-                  "redis.call('pexpire', KEYS[1], ARGV[1]); " +
-                  "return nil; " +
-              "end; " +
-              "return redis.call('pttl', KEYS[1]);"
+    "redis.call('hset', KEYS[1], ARGV[2], 1); " +
+    "redis.call('pexpire', KEYS[1], ARGV[1]); " +
+    "return nil; " +
+"end; " +
+"if (redis.call('hexists', KEYS[1], ARGV[2]) == 1) then " +
+    "redis.call('hincrby', KEYS[1], ARGV[2], 1); " +
+    "redis.call('pexpire', KEYS[1], ARGV[1]); " +
+    "return nil; " +
+"end; " +
+"return redis.call('pttl', KEYS[1]);"
 ```
 
 ![1653548087334](./pictures/HMDP/practice/1653548087334.png)
@@ -1800,7 +1798,7 @@ if (ttl == null) {
 }
 ```
 
-接下来会有一个条件分支，因为lock方法有重载方法，一个是带参数，一个是不带参数，如果带带参数传入的值是-1，如果传入参数，则leaseTime是他本身，所以如果传入了参数，此时leaseTime != -1 则会进去抢锁，抢锁的逻辑就是之前说的那三个逻辑
+接下来会有一个条件分支，因为lock方法有重载方法，一个是带参数，一个是不带参数，如果带参数传入的值是-1，如果传入参数，则leaseTime是他本身，所以如果传入了参数，此时leaseTime != -1 则会进去抢锁，抢锁的逻辑就是之前说的那三个逻辑
 
 ```java
 if (leaseTime != -1) {

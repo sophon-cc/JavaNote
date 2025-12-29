@@ -1,3 +1,5 @@
+[toc]
+
 # Spring Cloud
 
 微服务架构，首先是服务化，就是将单体架构中的功能模块从单体应用中拆分出来，独立部署为多个服务。同时要满足下面的一些特点：
@@ -47,8 +49,267 @@ https://nacos.io/zh-cn/
 
 我们基于Docker来部署Nacos的注册中心，首先我们要准备MySQL数据库表，用来存储Nacos的数据（此案例中，nacos存储数据的数据库由自己创建）。由于是Docker部署，所以大家需要将资料中的SQL文件导入到你Docker中的MySQL容器中：
 
-```mysql
--- 案例数据库建库（database：nacos）建表（table：12张表）操作略
+```sql
+-- 案例数据库建库（database：nacos）建表（table：12张表）
+-- --------------------------------------------------------
+-- 主机:                           192.168.150.101
+-- 服务器版本:                        8.0.27 - MySQL Community Server - GPL
+-- 服务器操作系统:                      Linux
+-- HeidiSQL 版本:                  12.2.0.6576
+-- --------------------------------------------------------
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET NAMES utf8 */;
+/*!50503 SET NAMES utf8mb4 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+
+-- 导出 nacos 的数据库结构
+DROP DATABASE IF EXISTS `nacos`;
+CREATE DATABASE IF NOT EXISTS `nacos` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
+USE `nacos`;
+
+-- 导出  表 nacos.config_info 结构
+DROP TABLE IF EXISTS `config_info`;
+CREATE TABLE IF NOT EXISTS `config_info` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT 'id',
+  `data_id` varchar(255) COLLATE utf8_bin NOT NULL COMMENT 'data_id',
+  `group_id` varchar(128) COLLATE utf8_bin DEFAULT NULL,
+  `content` longtext COLLATE utf8_bin NOT NULL COMMENT 'content',
+  `md5` varchar(32) COLLATE utf8_bin DEFAULT NULL COMMENT 'md5',
+  `gmt_create` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `gmt_modified` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '修改时间',
+  `src_user` text COLLATE utf8_bin COMMENT 'source user',
+  `src_ip` varchar(50) COLLATE utf8_bin DEFAULT NULL COMMENT 'source ip',
+  `app_name` varchar(128) COLLATE utf8_bin DEFAULT NULL,
+  `tenant_id` varchar(128) COLLATE utf8_bin DEFAULT '' COMMENT '租户字段',
+  `c_desc` varchar(256) COLLATE utf8_bin DEFAULT NULL,
+  `c_use` varchar(64) COLLATE utf8_bin DEFAULT NULL,
+  `effect` varchar(64) COLLATE utf8_bin DEFAULT NULL,
+  `type` varchar(64) COLLATE utf8_bin DEFAULT NULL,
+  `c_schema` text COLLATE utf8_bin,
+  `encrypted_data_key` text COLLATE utf8_bin NOT NULL COMMENT '秘钥',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_configinfo_datagrouptenant` (`data_id`,`group_id`,`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8_bin COMMENT='config_info';
+
+-- 正在导出表  nacos.config_info 的数据：~0 rows (大约)
+DELETE FROM `config_info`;
+
+-- 导出  表 nacos.config_info_aggr 结构
+DROP TABLE IF EXISTS `config_info_aggr`;
+CREATE TABLE IF NOT EXISTS `config_info_aggr` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT 'id',
+  `data_id` varchar(255) COLLATE utf8_bin NOT NULL COMMENT 'data_id',
+  `group_id` varchar(128) COLLATE utf8_bin NOT NULL COMMENT 'group_id',
+  `datum_id` varchar(255) COLLATE utf8_bin NOT NULL COMMENT 'datum_id',
+  `content` longtext COLLATE utf8_bin NOT NULL COMMENT '内容',
+  `gmt_modified` datetime NOT NULL COMMENT '修改时间',
+  `app_name` varchar(128) COLLATE utf8_bin DEFAULT NULL,
+  `tenant_id` varchar(128) COLLATE utf8_bin DEFAULT '' COMMENT '租户字段',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_configinfoaggr_datagrouptenantdatum` (`data_id`,`group_id`,`tenant_id`,`datum_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8_bin COMMENT='增加租户字段';
+
+-- 正在导出表  nacos.config_info_aggr 的数据：~0 rows (大约)
+DELETE FROM `config_info_aggr`;
+
+-- 导出  表 nacos.config_info_beta 结构
+DROP TABLE IF EXISTS `config_info_beta`;
+CREATE TABLE IF NOT EXISTS `config_info_beta` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT 'id',
+  `data_id` varchar(255) COLLATE utf8_bin NOT NULL COMMENT 'data_id',
+  `group_id` varchar(128) COLLATE utf8_bin NOT NULL COMMENT 'group_id',
+  `app_name` varchar(128) COLLATE utf8_bin DEFAULT NULL COMMENT 'app_name',
+  `content` longtext COLLATE utf8_bin NOT NULL COMMENT 'content',
+  `beta_ips` varchar(1024) COLLATE utf8_bin DEFAULT NULL COMMENT 'betaIps',
+  `md5` varchar(32) COLLATE utf8_bin DEFAULT NULL COMMENT 'md5',
+  `gmt_create` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `gmt_modified` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '修改时间',
+  `src_user` text COLLATE utf8_bin COMMENT 'source user',
+  `src_ip` varchar(50) COLLATE utf8_bin DEFAULT NULL COMMENT 'source ip',
+  `tenant_id` varchar(128) COLLATE utf8_bin DEFAULT '' COMMENT '租户字段',
+  `encrypted_data_key` text COLLATE utf8_bin NOT NULL COMMENT '秘钥',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_configinfobeta_datagrouptenant` (`data_id`,`group_id`,`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8_bin COMMENT='config_info_beta';
+
+-- 正在导出表  nacos.config_info_beta 的数据：~0 rows (大约)
+DELETE FROM `config_info_beta`;
+
+-- 导出  表 nacos.config_info_tag 结构
+DROP TABLE IF EXISTS `config_info_tag`;
+CREATE TABLE IF NOT EXISTS `config_info_tag` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT 'id',
+  `data_id` varchar(255) COLLATE utf8_bin NOT NULL COMMENT 'data_id',
+  `group_id` varchar(128) COLLATE utf8_bin NOT NULL COMMENT 'group_id',
+  `tenant_id` varchar(128) COLLATE utf8_bin DEFAULT '' COMMENT 'tenant_id',
+  `tag_id` varchar(128) COLLATE utf8_bin NOT NULL COMMENT 'tag_id',
+  `app_name` varchar(128) COLLATE utf8_bin DEFAULT NULL COMMENT 'app_name',
+  `content` longtext COLLATE utf8_bin NOT NULL COMMENT 'content',
+  `md5` varchar(32) COLLATE utf8_bin DEFAULT NULL COMMENT 'md5',
+  `gmt_create` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `gmt_modified` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '修改时间',
+  `src_user` text COLLATE utf8_bin COMMENT 'source user',
+  `src_ip` varchar(50) COLLATE utf8_bin DEFAULT NULL COMMENT 'source ip',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_configinfotag_datagrouptenanttag` (`data_id`,`group_id`,`tenant_id`,`tag_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8_bin COMMENT='config_info_tag';
+
+-- 正在导出表  nacos.config_info_tag 的数据：~0 rows (大约)
+DELETE FROM `config_info_tag`;
+
+-- 导出  表 nacos.config_tags_relation 结构
+DROP TABLE IF EXISTS `config_tags_relation`;
+CREATE TABLE IF NOT EXISTS `config_tags_relation` (
+  `id` bigint NOT NULL COMMENT 'id',
+  `tag_name` varchar(128) COLLATE utf8_bin NOT NULL COMMENT 'tag_name',
+  `tag_type` varchar(64) COLLATE utf8_bin DEFAULT NULL COMMENT 'tag_type',
+  `data_id` varchar(255) COLLATE utf8_bin NOT NULL COMMENT 'data_id',
+  `group_id` varchar(128) COLLATE utf8_bin NOT NULL COMMENT 'group_id',
+  `tenant_id` varchar(128) COLLATE utf8_bin DEFAULT '' COMMENT 'tenant_id',
+  `nid` bigint NOT NULL AUTO_INCREMENT,
+  PRIMARY KEY (`nid`),
+  UNIQUE KEY `uk_configtagrelation_configidtag` (`id`,`tag_name`,`tag_type`),
+  KEY `idx_tenant_id` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8_bin COMMENT='config_tag_relation';
+
+-- 正在导出表  nacos.config_tags_relation 的数据：~0 rows (大约)
+DELETE FROM `config_tags_relation`;
+
+-- 导出  表 nacos.group_capacity 结构
+DROP TABLE IF EXISTS `group_capacity`;
+CREATE TABLE IF NOT EXISTS `group_capacity` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `group_id` varchar(128) COLLATE utf8_bin NOT NULL DEFAULT '' COMMENT 'Group ID，空字符表示整个集群',
+  `quota` int unsigned NOT NULL DEFAULT '0' COMMENT '配额，0表示使用默认值',
+  `usage` int unsigned NOT NULL DEFAULT '0' COMMENT '使用量',
+  `max_size` int unsigned NOT NULL DEFAULT '0' COMMENT '单个配置大小上限，单位为字节，0表示使用默认值',
+  `max_aggr_count` int unsigned NOT NULL DEFAULT '0' COMMENT '聚合子配置最大个数，，0表示使用默认值',
+  `max_aggr_size` int unsigned NOT NULL DEFAULT '0' COMMENT '单个聚合数据的子配置大小上限，单位为字节，0表示使用默认值',
+  `max_history_count` int unsigned NOT NULL DEFAULT '0' COMMENT '最大变更历史数量',
+  `gmt_create` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `gmt_modified` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '修改时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_group_id` (`group_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8_bin COMMENT='集群、各Group容量信息表';
+
+-- 正在导出表  nacos.group_capacity 的数据：~0 rows (大约)
+DELETE FROM `group_capacity`;
+
+-- 导出  表 nacos.his_config_info 结构
+DROP TABLE IF EXISTS `his_config_info`;
+CREATE TABLE IF NOT EXISTS `his_config_info` (
+  `id` bigint unsigned NOT NULL,
+  `nid` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `data_id` varchar(255) COLLATE utf8_bin NOT NULL,
+  `group_id` varchar(128) COLLATE utf8_bin NOT NULL,
+  `app_name` varchar(128) COLLATE utf8_bin DEFAULT NULL COMMENT 'app_name',
+  `content` longtext COLLATE utf8_bin NOT NULL,
+  `md5` varchar(32) COLLATE utf8_bin DEFAULT NULL,
+  `gmt_create` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `gmt_modified` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `src_user` text COLLATE utf8_bin,
+  `src_ip` varchar(50) COLLATE utf8_bin DEFAULT NULL,
+  `op_type` char(10) COLLATE utf8_bin DEFAULT NULL,
+  `tenant_id` varchar(128) COLLATE utf8_bin DEFAULT '' COMMENT '租户字段',
+  `encrypted_data_key` text COLLATE utf8_bin NOT NULL COMMENT '秘钥',
+  PRIMARY KEY (`nid`),
+  KEY `idx_gmt_create` (`gmt_create`),
+  KEY `idx_gmt_modified` (`gmt_modified`),
+  KEY `idx_did` (`data_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8_bin COMMENT='多租户改造';
+
+-- 正在导出表  nacos.his_config_info 的数据：~0 rows (大约)
+DELETE FROM `his_config_info`;
+
+-- 导出  表 nacos.permissions 结构
+DROP TABLE IF EXISTS `permissions`;
+CREATE TABLE IF NOT EXISTS `permissions` (
+  `role` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
+  `resource` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `action` varchar(8) COLLATE utf8mb4_general_ci NOT NULL,
+  UNIQUE KEY `uk_role_permission` (`role`,`resource`,`action`) USING BTREE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- 正在导出表  nacos.permissions 的数据：~0 rows (大约)
+DELETE FROM `permissions`;
+
+-- 导出  表 nacos.roles 结构
+DROP TABLE IF EXISTS `roles`;
+CREATE TABLE IF NOT EXISTS `roles` (
+  `username` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
+  `role` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
+  UNIQUE KEY `idx_user_role` (`username`,`role`) USING BTREE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- 正在导出表  nacos.roles 的数据：~1 rows (大约)
+DELETE FROM `roles`;
+INSERT INTO `roles` (`username`, `role`) VALUES
+	('nacos', 'ROLE_ADMIN');
+
+-- 导出  表 nacos.tenant_capacity 结构
+DROP TABLE IF EXISTS `tenant_capacity`;
+CREATE TABLE IF NOT EXISTS `tenant_capacity` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `tenant_id` varchar(128) COLLATE utf8_bin NOT NULL DEFAULT '' COMMENT 'Tenant ID',
+  `quota` int unsigned NOT NULL DEFAULT '0' COMMENT '配额，0表示使用默认值',
+  `usage` int unsigned NOT NULL DEFAULT '0' COMMENT '使用量',
+  `max_size` int unsigned NOT NULL DEFAULT '0' COMMENT '单个配置大小上限，单位为字节，0表示使用默认值',
+  `max_aggr_count` int unsigned NOT NULL DEFAULT '0' COMMENT '聚合子配置最大个数',
+  `max_aggr_size` int unsigned NOT NULL DEFAULT '0' COMMENT '单个聚合数据的子配置大小上限，单位为字节，0表示使用默认值',
+  `max_history_count` int unsigned NOT NULL DEFAULT '0' COMMENT '最大变更历史数量',
+  `gmt_create` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `gmt_modified` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '修改时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_tenant_id` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8_bin COMMENT='租户容量信息表';
+
+-- 正在导出表  nacos.tenant_capacity 的数据：~0 rows (大约)
+DELETE FROM `tenant_capacity`;
+
+-- 导出  表 nacos.tenant_info 结构
+DROP TABLE IF EXISTS `tenant_info`;
+CREATE TABLE IF NOT EXISTS `tenant_info` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT 'id',
+  `kp` varchar(128) COLLATE utf8_bin NOT NULL COMMENT 'kp',
+  `tenant_id` varchar(128) COLLATE utf8_bin DEFAULT '' COMMENT 'tenant_id',
+  `tenant_name` varchar(128) COLLATE utf8_bin DEFAULT '' COMMENT 'tenant_name',
+  `tenant_desc` varchar(256) COLLATE utf8_bin DEFAULT NULL COMMENT 'tenant_desc',
+  `create_source` varchar(32) COLLATE utf8_bin DEFAULT NULL COMMENT 'create_source',
+  `gmt_create` bigint NOT NULL COMMENT '创建时间',
+  `gmt_modified` bigint NOT NULL COMMENT '修改时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_tenant_info_kptenantid` (`kp`,`tenant_id`),
+  KEY `idx_tenant_id` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8_bin COMMENT='tenant_info';
+
+-- 正在导出表  nacos.tenant_info 的数据：~0 rows (大约)
+DELETE FROM `tenant_info`;
+
+-- 导出  表 nacos.users 结构
+DROP TABLE IF EXISTS `users`;
+CREATE TABLE IF NOT EXISTS `users` (
+  `username` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
+  `password` varchar(500) COLLATE utf8mb4_general_ci NOT NULL,
+  `enabled` tinyint(1) NOT NULL,
+  PRIMARY KEY (`username`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- 正在导出表  nacos.users 的数据：~1 rows (大约)
+DELETE FROM `users`;
+INSERT INTO `users` (`username`, `password`, `enabled`) VALUES
+	('nacos', '$2a$10$EuWPZHzz32dJN7jexM34MOeYirDdFAZm2kuWj7VEOJhhZkDrxfvUu', 1);
+
+/*!40103 SET TIME_ZONE=IFNULL(@OLD_TIME_ZONE, 'system') */;
+/*!40101 SET SQL_MODE=IFNULL(@OLD_SQL_MODE, '') */;
+/*!40014 SET FOREIGN_KEY_CHECKS=IFNULL(@OLD_FOREIGN_KEY_CHECKS, 1) */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40111 SET SQL_NOTES=IFNULL(@OLD_SQL_NOTES, 1) */;
 ```
 
 docker 挂载 linux 本地文件的路径和配置 `/root/nacos/custom.env` ：
@@ -114,6 +375,22 @@ cloud:
     nacos:
     server-addr: 192.168.150.101:8848 # nacos地址
 ```
+
+> 完整配置参考（服务注册）：
+> 
+> ```yaml
+> spring:
+>   // 省略 ...
+>   cloud:
+>     nacos:
+>       config:
+>  		// 省略...
+>       discovery:
+>         enabled: true # 启用服务发现
+>         group: DEFAULT_GROUP # 所属组
+>         namespace: xiaohashu # 命名空间
+>         server-addr: 127.0.0.1:8848 # 指定 Nacos 配置中心的服务器地址
+> ```
 
 **3.测试启动多服务实例**
 
@@ -395,56 +672,27 @@ public class DefaultFeignConfig {
 在hm-gateway模块的pom.xml文件中引入依赖：
 
 ```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-    <parent>
-        <artifactId>hmall</artifactId>
-        <groupId>com.heima</groupId>
-        <version>1.0.0</version>
-    </parent>
-    <modelVersion>4.0.0</modelVersion>
-
-    <artifactId>hm-gateway</artifactId>
-
-    <properties>
-        <maven.compiler.source>11</maven.compiler.source>
-        <maven.compiler.target>11</maven.compiler.target>
-    </properties>
-    <dependencies>
-        <!--common-->
-        <dependency>
-            <groupId>com.heima</groupId>
-            <artifactId>hm-common</artifactId>
-            <version>1.0.0</version>
-        </dependency>
-        <!--网关-->
-        <dependency>
-            <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-starter-gateway</artifactId>
-        </dependency>
-        <!--nacos discovery-->
-        <dependency>
-            <groupId>com.alibaba.cloud</groupId>
-            <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
-        </dependency>
-        <!--负载均衡-->
-        <dependency>
-            <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-starter-loadbalancer</artifactId>
-        </dependency>
-    </dependencies>
-    <build>
-        <finalName>${project.artifactId}</finalName>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-        </plugins>
-    </build>
-</project>
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-bootstrap</artifactId>
+    </dependency>
+    <!--网关-->
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-gateway</artifactId>
+    </dependency>
+    <!--nacos discovery-->
+    <dependency>
+        <groupId>com.alibaba.cloud</groupId>
+        <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+    </dependency>
+    <!--负载均衡-->
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-loadbalancer</artifactId>
+    </dependency>
+</dependencies>
 ```
 
 **2.启动类**
@@ -622,7 +870,7 @@ FilteringWebHandler在处理请求时，会将GlobalFilter装饰为GatewayFilter
 
 Gateway内置的GatewayFilter过滤器使用起来非常简单，无需编码，只要在yaml文件中简单配置即可。而且其作用范围也很灵活，配置在哪个Route下，就作用于哪个Route.
 例如，有一个过滤器叫做AddRequestHeaderGatewayFilterFacotry，顾明思议，就是添加请求头的过滤器，可以给请求添加一个请求头并传递到下游微服务。
-使用的使用只需要在application.yaml中这样配置：
+使用只需要在application.yaml中这样配置：
 
 ```yaml
 spring:
@@ -939,6 +1187,66 @@ public RequestInterceptor userInfoRequestInterceptor(){
 
 现在微服务之间通过OpenFeign调用时也会传递登录用户信息了。
 
+## 网关自定义全局异常
+
+在网关服务中创建一个 /exception 异常包，用于统一放置异常相关的代码。然后，创建 GlobalExceptionHandler 全局异常处理器，代码如下：
+
+```java
+@Component
+@Slf4j
+public class GlobalExceptionHandler implements ErrorWebExceptionHandler {
+
+    @Resource
+    private ObjectMapper objectMapper;
+
+    @Override
+    public Mono<Void> handle(ServerWebExchange exchange, Throwable ex) {
+        // 获取响应对象
+        ServerHttpResponse response = exchange.getResponse();
+
+        log.error("==> 全局异常捕获: ", ex);
+
+        // 响参
+        Response<?> result = null;
+        // 根据捕获的异常类型，设置不同的响应状态码和响应消息
+        /*
+        if (ex instanceof SaTokenException) { // Sa-Token 异常
+            // 权限认证失败时，设置 401 状态码
+            response.setStatusCode(HttpStatus.UNAUTHORIZED);
+            // 构建响应结果
+            result = Response.fail(ResponseCodeEnum.UNAUTHORIZED.getErrorCode(), ResponseCodeEnum.UNAUTHORIZED.getErrorMessage());
+        } else { // 其他异常，则统一提示 “系统繁忙” 错误
+            result = Response.fail(ResponseCodeEnum.SYSTEM_ERROR);
+        }
+        */
+
+        // 设置响应头的内容类型为 application/json;charset=UTF-8，表示响应体为 JSON 格式
+        response.getHeaders().setContentType(MediaType.APPLICATION_JSON_UTF8);
+        // 设置 body 响应体
+        return response.writeWith(Mono.fromSupplier(() -> { // 使用 Mono.fromSupplier 创建响应体
+            DataBufferFactory bufferFactory = response.bufferFactory();
+            try {
+                // 使用 ObjectMapper 将 result 对象转换为 JSON 字节数组
+                return bufferFactory.wrap(objectMapper.writeValueAsBytes(result));
+            } catch (Exception e) {
+                // 如果转换过程中出现异常，则返回空字节数组
+                return bufferFactory.wrap(new byte[0]);
+            }
+        }));
+    }
+}
+```
+
+> 其中：Response 为自定义的返回类型，通常自定义为包含响应信息、响应状态码、数据。
+
+和 Spring Boot 中使用 @ControllerAdvice 注解，来定义全局异常捕获器不同。在网关中，你需要创建 ErrorWebExceptionHandler 的实现类，并将其注入到 Spring 容器中。
+
+在 handle() 异常处理方法中，对方法的入参 ex 异常进行类型判断，从而设置不同的响应状态码和响应消息：
+如果异常类型为 SaTokenException，则设置 401 状态码，并构建响应结果；
+其他异常，则统一提示 “系统繁忙” 错误。
+
+设置响应头的内容类型为 application/json;charset=UTF-8，表示响应体为 JSON 格式；设置 body 响应体，并返回响参。
+
 # 配置管理
 
 到目前为止我们已经解决了微服务相关的几个问题：
@@ -997,9 +1305,9 @@ mybatis-plus:
 ```
 
 注意这里的jdbc的相关参数并没有写死，例如：
-- 数据库ip：通过${hm.db.host:192.168.150.101}配置了默认值为192.168.150.101，同时允许通过${hm.db.host}来覆盖默认值
-- 数据库端口：通过${hm.db.port:3306}配置了默认值为3306，同时允许通过${hm.db.port}来覆盖默认值
-- 数据库database：可以通过${hm.db.database}来设定，无默认值
+- 数据库ip：通过\${hm.db.host:192.168.150.101}配置了默认值为192.168.150.101，同时允许通过\${hm.db.host}来覆盖默认值
+- 数据库端口：通过\${hm.db.port:3306}配置了默认值为3306，同时允许通过\${hm.db.port}来覆盖默认值
+- 数据库database：可以通过\${hm.db.database}来设定，无默认值
 
 然后是统一的日志配置，命名为shared-log.yaml，配置内容如下：
 
@@ -1034,8 +1342,8 @@ knife4j:
 ```
 
 注意，这里的swagger相关配置我们没有写死，例如：
-- title：接口文档标题，我们用了${hm.swagger.title}来代替，将来可以有用户手动指定
-- email：联系人邮箱，我们用了${hm.swagger.email:zhanghuyi@itcast.cn}，默认值是zhanghuyi@itcast.cn，同时允许用户利用${hm.swagger.email}来覆盖。
+- title：接口文档标题，我们用了\${hm.swagger.title}来代替，将来可以有用户手动指定
+- email：联系人邮箱，我们用了\${hm.swagger.email:zhanghuyi@itcast.cn}，默认值是zhanghuyi@itcast.cn，同时允许用户利用\${hm.swagger.email}来覆盖。
 
 **2.拉取共享配置**
 

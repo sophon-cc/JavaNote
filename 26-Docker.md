@@ -1,3 +1,5 @@
+[toc]
+
 # 1 Docker 快速入门
 ## 1.1 部署 MySQL
 使用Docker部署 MySQL，仅仅需要一步即可，在命令行（CentOS 7.9）输入下面的命令：

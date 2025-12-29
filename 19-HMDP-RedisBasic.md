@@ -1,3 +1,5 @@
+[toc]
+
 # 基础篇Redis
 ## 1.Redis简单介绍
 

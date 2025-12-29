@@ -1,3 +1,5 @@
+[toc]
+
 # 1.初识elasticsearch
 
 Elasticsearch的官方网站如下：https://www.elastic.co/cn/elasticsearch/ 。
