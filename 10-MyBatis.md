@@ -1116,72 +1116,67 @@ false：读写缓存；会返回缓存对象的拷贝（通过序列化）。这
 | diskExpiryThreadIntervalSeconds | 否       | 磁盘缓存的清理线程运行间隔，默认120秒                                |
 | memoryStoreEvictionPolicy       | 否       | 内存缓存达到最大时的移除策略，默认LRU（可选LFU、FIFO）               |
 
-# 十一、MyBatis的逆向工程（了解）
-正向工程：先创建Java实体类，由框架负责根据实体类生成数据库表。Hibernate是支持正向工程
-的。
-逆向工程：先创建数据库表，由框架负责根据数据库表，反向生成如下资源：
-- Java 实体类
-- Mapper 接口
-- Mapper 映射文件
+# 十一、MyBatis 代码生成
 
-## 1 、创建逆向工程的步骤
+mybatis-generator-maven-plugin 是一个 Maven 插件，用于生成 MyBatis 的代码（如 Mapper 接口、Mapper XML 文件等），官方文档地址: https://mybatis.org/generator/ 。它可以根据数据库表自动生成相应的 Java 实体类、Mapper 接口和 XML 映射文件，大大减少了手动编写这些重复且机械化的代码的工作量。
 
-## a>添加依赖和插件
+## 1、添加依赖和插件
 ```xml
-<!-- 依赖MyBatis核心包 -->
-<dependencies>
-    <dependency>
-        <groupId>org.mybatis</groupId>
-        <artifactId>mybatis</artifactId>
-        <version>3.5.11</version>
-    </dependency>
-</dependencies>
-<!-- 控制Maven在构建过程中相关配置 -->
+<!-- Mybatis -->
+<dependency>
+    <groupId>org.mybatis.spring.boot</groupId>
+    <artifactId>mybatis-spring-boot-starter</artifactId>
+    <version>${spring-boot.version}</version>
+</dependency>
+
+ <build>
+    <!-- 统一插件管理 -->
+    <pluginManagement>
+        <plugins>
+            // 省略...
+
+            <!-- 代码生成器 -->
+            <plugin>
+                <groupId>org.mybatis.generator</groupId>
+                <artifactId>mybatis-generator-maven-plugin</artifactId>
+                <version>${mybatis-generator-maven-plugin.version}</version>
+                <configuration>
+                    <!-- 允许移动生成的文件 -->
+                    <verbose>true</verbose>
+                    <!-- 允许覆盖生成的文件 -->
+                    <overwrite>true</overwrite>
+                </configuration>
+                <!-- 此插件需要连接数据库，所以需要依赖 MySQL 驱动 -->
+                <dependencies>
+                    <dependency>
+                        <groupId>mysql</groupId>
+                        <artifactId>mysql-connector-java</artifactId>
+                        <version>${mysql-connector-java.version}</version>
+                    </dependency>
+                </dependencies>
+            </plugin>
+        </plugins>
+    </pluginManagement>
+
+</build>
+```
+
+子模块引入插件：
+
+```xml
 <build>
-    <!-- 构建过程中用到的插件 -->
     <plugins>
-        <!-- 具体插件，逆向工程的操作是以构建过程中插件形式出现的 -->
+        <!-- 代码生成器 -->
         <plugin>
             <groupId>org.mybatis.generator</groupId>
             <artifactId>mybatis-generator-maven-plugin</artifactId>
-            <version>1.4.2</version>
-            <!--generator 生成文件强制覆盖，避免生成 .1 .2后缀结尾的文件-->
-            <configuration>
-                <overwrite>true</overwrite>
-            </configuration>
-            <!-- 插件的依赖 -->
-            <dependencies>
-                <!-- 逆向工程的核心依赖 -->
-                <dependency>
-                    <groupId>org.mybatis.generator</groupId>
-                    <artifactId>mybatis-generator-core</artifactId>
-                    <version>1.4.2</version>
-                </dependency>
-
-                <!-- 数据库连接池 -->
-                <dependency>
-                    <groupId>com.mchange</groupId>
-                    <artifactId>c3p0</artifactId>
-                    <version>0.9.5.4</version>
-                </dependency>
-
-                <!-- MySQL驱动 -->
-                <dependency>
-                    <groupId>mysql</groupId>
-                    <artifactId>mysql-connector-java</artifactId>
-                    <version>8.0.30</version>
-                </dependency>
-            </dependencies>
         </plugin>
     </plugins>
 </build>
 ```
 
-> 插件依赖下载不下来可以先放到全局 <dependencies> 标签内下载。
+## 2、创建逆向工程的配置文件
 
-### b>创建MyBatis的核心配置文件
-
-### c>创建逆向工程的配置文件
 > 文件名必须是：generatorConfig.xml
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -1191,56 +1186,67 @@ false：读写缓存；会返回缓存对象的拷贝（通过序列化）。这
 <generatorConfiguration>
     <!--
         targetRuntime: 执行生成的逆向工程的版本
-            MyBatis3Simple: 生成基本的CRUD（清新简洁版）
-            MyBatis3: 生成带条件的CRUD（奢华尊享版）
+        MyBatis3Simple: 生成基本的CRUD（清新简洁版）
+        MyBatis3: 生成带条件的CRUD（奢华尊享版）
     -->
-    <properties resource="jdbc.properties"/>
+    <context id="mysqlTables" targetRuntime="MyBatis3" defaultModelType="flat">
 
-    <context id="DB2Tables" targetRuntime="MyBatis3Simple">
+        <!-- 自动检查关键字，为关键字增加反引号，如：`type` -->
+        <property name="autoDelimitKeywords" value="true"/>
+        <property name="beginningDelimiter" value="`"/>
+        <property name="endingDelimiter" value="`"/>
+        <!-- 指定生成的 Java 文件编码 -->
+        <property name="javaFileEncoding" value="UTF-8"/>
 
-        <!-- 数据库的连接信息 -->
-        <jdbcConnection driverClass="${jdbc.driver}"
-                        connectionURL="${jdbc.url}"
-                        userId="${jdbc.username}"
-                        password="${jdbc.password}">
+        <!-- 对生成的注释进行控制 -->
+        <commentGenerator>
+            <!-- 由于此插件生成的注释不太美观，这里设置不生成任何注释 -->
+            <property name="suppressAllComments" value="true"/>
+        </commentGenerator>
+
+        <!-- 数据库链接 -->
+        <jdbcConnection driverClass="com.mysql.cj.jdbc.Driver"
+                        connectionURL="jdbc:mysql://127.0.0.1:3306/xiaohashu"
+                        userId="root"
+                        password="123456">
+            <!-- 解决多个重名的表生成表结构不一致问题 -->
+            <property name="nullCatalogMeansCurrent" value="true"/>
         </jdbcConnection>
-        <!-- javaBean的生成策略 targetPackage：包路径；targetProject：位置-->
-        <javaModelGenerator targetPackage="com.mybatis.pojo"
-                            targetProject=".\src\main\java">
-            <property name="enableSubPackages" value="true" />
-            <!--去掉数据库表字段名前后的空格-->
-            <property name="trimStrings" value="true" />
-        </javaModelGenerator>
-        <!-- SQL映射文件的生成策略 -->
-        <sqlMapGenerator targetPackage="com.mybatis.mapper"
-                         targetProject=".\src\main\resources">
-            <property name="enableSubPackages" value="true" />
-        </sqlMapGenerator>
-        <!-- Mapper接口的生成策略 -->
-        <javaClientGenerator type="XMLMAPPER"
-                             targetPackage="com.mybatis.mapper" targetProject=".\src\main\java">
-            <property name="enableSubPackages" value="true" />
-        </javaClientGenerator>
-        <!-- 逆向分析的表 -->
-        <!-- tableName设置为*号，可以对应所有表，此时不写domainObjectName -->
-        <!-- domainObjectName属性指定生成出来的实体类的类名 -->
-        <table tableName="t_emp" domainObjectName="Emp"/>
-        <table tableName="t_dept" domainObjectName="Dept"/>
+
+        <!-- 不强制将所有的数值类型映射为 Java 的 BigDecimal 类型 -->
+        <javaTypeResolver>
+            <property name="forceBigDecimals" value="false"/>
+        </javaTypeResolver>
+
+        <!-- DO 实体类存放路径 -->
+        <javaModelGenerator targetPackage="com.quanxiaoha.xiaohashu.auth.domain.dataobject"
+                            targetProject="src/main/java"/>
+
+        <!-- Mapper xml 文件存放路径-->
+        <sqlMapGenerator targetPackage="mapper"
+                         targetProject="src/main/resources"/>
+
+        <!-- Mapper 接口存放路径 -->
+        <javaClientGenerator type="XMLMAPPER" targetPackage="com.quanxiaoha.xiaohashu.auth.domain.mapper"
+                             targetProject="src/main/java"/>
+
+        <!-- 需要生成的表-实体类 -->
+        <table tableName="t_user" domainObjectName="UserDO"
+               enableCountByExample="false"
+               enableUpdateByExample="false"
+               enableDeleteByExample="false"
+               enableSelectByExample="false"
+               selectByExampleQueryId="false"/>
     </context>
 </generatorConfiguration>
 ```
 
-### d>执行MBG插件的generate目标
+### 3、生成 DO 实体类、Mapper 接口、XML 映射文件
 ![](./pictures/mybatis/generator.png)
-效果：
-![](./pictures/mybatis/genResults.png)
-
-
-## 2 、QBC查询
 
 # 十二、分页插件（了解）
 
-> 原始方式，最新方式参考 [SpringBoot 数据校验](./SSM-MyBatis.md#分页插件)
+> 原始方式，最新方式参考 [SpringBoot 分页插件](./SSM-MyBatis.md#分页插件)
 
 ## ~~1 、分页插件使用步骤~~
 

@@ -369,27 +369,37 @@ docker run -d \
 
 ```yaml
 spring:
-application:
+  application:
     name: item-service # 服务名称
-cloud:
+  cloud:
     nacos:
-    server-addr: 192.168.150.101:8848 # nacos地址
+      server-addr: 192.168.150.101:8848 # nacos地址
 ```
-
-> 完整配置参考（服务注册）：
+> 2026/01/01 补充：
+>
+> 完整配置参考（服务注册 bootstrap.yml）：
 > 
 > ```yaml
 > spring:
+>   application:
+>     name: item-service # 微服务名称
 >   // 省略 ...
 >   cloud:
 >     nacos:
->       config:
->  		// 省略...
 >       discovery:
 >         enabled: true # 启用服务发现
 >         group: DEFAULT_GROUP # 所属组
 >         namespace: xiaohashu # 命名空间
 >         server-addr: 127.0.0.1:8848 # 指定 Nacos 配置中心的服务器地址
+> ```
+> 
+> bootstrap 方式还需引入依赖：
+> 
+> ```xml
+> <dependency>
+>     <groupId>org.springframework.cloud</groupId>
+>     <artifactId>spring-cloud-starter-bootstrap</artifactId>
+> </dependency>
 > ```
 
 **3.测试启动多服务实例**
@@ -435,9 +445,9 @@ cloud:
 
 ```yaml
 spring:
-cloud:
+  cloud:
     nacos:
-    server-addr: 192.168.150.101:8848
+      server-addr: 192.168.150.101:8848
 ```
 
 接下来，服务调用者cart-service就可以去订阅item-service服务了。不过item-service有多个实例，而真正发起调用时只需要知道一个实例的地址。
@@ -563,8 +573,8 @@ Feign底层发起http请求，依赖于其它的框架。其底层支持的http�
 
 ```yaml
 feign:
-okhttp:
-    enabled: true # 开启OKHttp功能
+  okhttp:
+      enabled: true # 开启OKHttp功能
 ```
 
 ## 最佳实践
@@ -577,7 +587,7 @@ okhttp:
 ![](./pictures/SpringCloud/BestPractices.png)
 
 方案1抽取更加简单，工程结构也比较清晰，但缺点是整个项目耦合度偏高。
-方案2抽取相对麻烦，工程结构相对更复杂，但服务之间耦合度降低。
+方案2抽取相对麻烦，工程结构相对更复杂，但服务之间耦合度降低。推荐使用此方案。
 
 ## 日志配置
 
@@ -877,12 +887,12 @@ spring:
   cloud:
     gateway:
       routes:
-      - id: test_route
-        uri: lb://test-service
-        predicates:
-          -Path=/test/**
-        filters:
-          - AddRequestHeader=key, value # 逗号之前是请求头的key，逗号之后是value
+        - id: test_route
+          uri: lb://test-service
+          predicates:
+            -Path=/test/**
+          filters:
+            - AddRequestHeader=key, value # 逗号之前是请求头的key，逗号之后是value
 ```
 
 如果想要让过滤器作用于所有的路由，则可以这样配置：
@@ -894,10 +904,10 @@ spring:
       default-filters: # default-filters下的过滤器可以作用于所有路由
         - AddRequestHeader=key, value
       routes:
-      - id: test_route
-        uri: lb://test-service
-        predicates:
-          -Path=/test/**
+        - id: test_route
+          uri: lb://test-service
+          predicates:
+            -Path=/test/**
 ```
 
 ### 自定义过滤器
@@ -937,7 +947,7 @@ spring:
   cloud:
     gateway:
       default-filters:
-            - PrintAny # 此处直接以自定义的GatewayFilterFactory类名称前缀类声明过滤器
+        - PrintAny # 此处直接以自定义的GatewayFilterFactory类名称前缀类声明过滤器
 ```
 
 > 这种过滤器还可以支持动态配置参数，不过实现起来比较复杂。
@@ -1416,67 +1426,198 @@ hm:
 
 ## 配置热更新
 
-有很多的业务相关参数，将来可能会根据实际情况临时调整。例如购物车业务，购物车数量有一个上限，默认是10，对应代码如下：
+**创建配置**
 
-![](./pictures/SpringCloud/CheckCartsFull.png)
+进入 Nacos 管理后台，创建配置。浏览器访问： http://localhost:8848/nacos ， 进入到 Nacos 控制台，如下图所示，点击创建配置按钮：
 
-现在这里购物车是写死的固定值，我们应该将其配置在配置文件中，方便后期修改。
-但现在的问题是，即便写在配置文件中，修改了配置还是需要重新打包、重启服务才能生效。能不能不用重启，直接生效呢？
-这就要用到Nacos的配置热更新能力了，分为两步：
-- 在Nacos中添加配置
-- 在微服务读取配置
+![](./pictures/SpringCloud/add017.png)
 
-**1.添加配置到Nacos**
+![](./pictures/SpringCloud/add018.png)
 
-首先，我们在nacos中添加一个配置文件，将购物车的上限数量添加到配置中：
-
-![](./pictures/SpringCloud/ConfigMaxmount.png)
-
-注意文件的dataId格式：
+注意 Data ID 格式：
 
 ```text
 [服务名]-[spring.active.profile].[后缀名]
 ```
 
 文件名称由三部分组成：
-- 服务名：我们是购物车服务，所以是cart-service
+
+- 服务名：xiaohashu-auth
 - spring.active.profile：就是spring boot中的spring.active.profile，可以省略，则所有profile共享该配置
 - 后缀名：例如yaml
 
-这里我们直接使用cart-service.yaml这个名称，则不管是dev还是local环境都可以共享该配置。
-配置内容如下：
+这里我们直接使用xiaohashu-auth.yaml这个名称，则不管是dev还是local环境都可以共享该配置。
 
-```yaml
-hm:
-  cart:
-    maxAmount: 1 # 购物车商品数量上限
+### 微服务项目
+
+**添加依赖**
+
+nacos-config-spring-boot-starter 依赖，来整合的 Nacos，此方式适合单体项目。在微服务项目中，推荐使用 spring-cloud-starter-alibaba-nacos-config依赖，编辑认证服务的 pom.xml 文件，添加依赖如下：
+
+```xml
+<dependency>
+    <groupId>com.alibaba.cloud</groupId>
+    <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
+</dependency>
+
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-bootstrap</artifactId>
+</dependency>
 ```
 
-**2.配置热更新**
+**添加 Nacos 配置项**
 
-接着，我们在微服务中读取配置，实现配置热更新。
-在cart-service中新建一个属性读取类：CartProperties.java
+创建 bootstrap.yml 文件：
+
+```yaml
+spring:
+  application:
+    name: xiaohashu-auth # 应用名称
+  profiles:
+    active: dev # 默认激活 dev 本地开发环境
+  cloud:
+    nacos:
+      config:
+        server-addr: http://127.0.0.1:8848 # 指定 Nacos 配置中心的服务器地址
+        prefix: ${spring.application.name} # 配置 Data Id 前缀，这里使用应用名称作为前缀
+        group: DEFAULT_GROUP # 所属组
+        namespace: public # 命名空间
+        file-extension: yaml # 配置文件格式
+        refresh-enabled: true # 是否开启动态刷新
+```
+
+prefix : 配置中心的配置 Data Id 前缀，这里使用应用名称作为前缀，实际监听 Nacos 中的配置时，还会带上环境 profile 的值，比如激活的是 dev 环境，则实际监听的是 Data Id 为 xiaohashu-auth-dev.yaml 的配置，小伙伴们在 Nacos 后台命名配置 Data Id 的时候，名称需要保持一致，否则会监听不到对应配置。
+
+**添加 @RefreshScope 注解**
+
+为了能够让 AlarmConfig 配置类实时监听到 Nacos 中的配置，并注入不同的 Bean 实现类。还需要在类、方法上配置 @RefreshScope 注解，代码如下：
 
 ```java
-package com.hmall.cart.config;
+@Configuration
+@RefreshScope
+public class AlarmConfig {
 
-import lombok.Data;
-import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.stereotype.Component;
+    @Value("${alarm.type}")
+    private String alarmType;
 
-@Data
-@Component
-@ConfigurationProperties(prefix = "hm.cart")
-public class CartProperties {
-    private Integer maxAmount;
+    @Bean
+    @RefreshScope
+    public AlarmInterface mailAlarmHelper() {
+        // 根据配置文件中的告警类型，初始化选择不同的告警实现类
+        if (StringUtils.equals("sms", alarmType)) {
+            return new SmsAlarmHelper();
+        } else if (StringUtils.equals("mail", alarmType)) {
+            return new MailAlarmHelper();
+        } else {
+            throw new IllegalArgumentException("错误的告警类型...");
+        }
+    }
 }
 ```
 
-接着，在业务中使用该属性加载类：
+@RefreshScope 注解是 Spring Cloud 提供的一个注解，用于实现配置动态刷新功能。当配置中心的配置发生变化时，标注了 @RefreshScope 的 Bean 会重新加载最新的配置，而无需重启应用。
 
-![](./pictures/SpringCloud/TestHotUpdate.png)
+在 Nacos 配置中心的场景下，@RefreshScope 的主要功能包括：
 
-启动后，我们在nacos控制台，将购物车上限配置为其它数字，无需重启服务，配置热更新就生效了。
+- 动态刷新配置：当 Nacos 配置中心的配置发生变化时，应用中的配置会自动更新，避免了手动重启应用的繁琐过程。
+- 重新加载 Bean：标注了 @RefreshScope 的 Bean 会在配置变化后重新加载，确保 Bean 使用最新的配置。
+- 与 Spring Cloud 集成：@RefreshScope 与 Spring Cloud 的配置管理机制紧密集成，能够无缝地处理配置更新事件。
+
+**创建 Nacos 配置**
+
+登录到 Nacos 管理后台中，点击创建配置按钮。配置相关配置项，如下图所示，配置完成后，点击发布按钮：
+
+![](./pictures/SpringCloud/add020.png)
+
+一切准备就绪后，在 TestController 接口中，新增一个 /alarm 测试接口，代码如下：
+
+```java
+@Resource
+private AlarmInterface alarm;
+
+@GetMapping("/alarm")
+public String sendAlarm() {
+    alarm.send("系统出错啦，犬小哈这个月绩效没了，速度上线解决问题！");
+    return "alarm success";
+}
+```
+
+**重启项目**
+
+项目重启后，在 nacos 改变配置即可动态加载 bean 。
+
+### 单体项目（了解）
+
+**添加依赖**
+
+然后，添加 Nacos 配置需要使用的依赖：
+
+```xml
+<!-- Nacos 配置中心 -->
+<dependency>
+    <groupId>com.alibaba.boot</groupId>
+    <artifactId>nacos-config-spring-boot-starter</artifactId>
+</dependency>
+```
+
+**项目配置 Nacos**
+
+依赖添加完毕后，编辑 applicaiton.yml 文件，准备添加 Nacos 相关配置：
+
+![](./pictures/SpringCloud/add019.png)
+
+配置项如下：
+
+```yaml
+rate-limit:
+  api:
+    limit: 100 # 接口限流阈值
+
+nacos: 
+  config: # Nacos 配置中心
+    access-key: # 身份验证
+    secret-key: # 身份验证
+    data-id: xiaohashu-auth # 指定要加载的配置数据的 Data Id
+    group: DEFAULT_GROUP # 指定配置数据所属的组
+    type: yaml # 指定配置数据的格式
+    server-addr: http://127.0.0.1:8848/ # 指定 Nacos 配置中心的服务器地址
+    auto-refresh: true # 是否自动刷新配置
+    remote-first: true # 是否优先使用远程配置
+    bootstrap:
+      enable: true # 启动时，预热配置
+```
+
+**使用 @NacosValue 注解**
+
+编辑 TestController 控制器，将之前的 Spring 框架提供的 @Value 注解，替换为 Nacos 的 @NacosValue 注解，代码如下：
+
+```java
+@RestController
+@Slf4j
+public class TestController {
+    // @Value("${rate-limit.api.limit}")
+    @NacosValue(value = "${rate-limit.api.limit}", autoRefreshed = true)
+    private Integer limit;
+
+    @GetMapping("/test")
+    public String test() {
+        return "当前限流阈值为: " + limit;
+    }
+}
+```
+
+**创建 Nacos 配置**
+
+登录到 Nacos 管理后台中，点击创建配置按钮。配置相关配置项，如下图所示，配置完成后，点击发布按钮：
+
+![](./pictures/SpringCloud/add018.png)
+
+**重启项目**
+
+代码编写完毕后，记得重启项目，开始测试 Nacos 配置是否好使。进入到 Nacos 管理后台中，点击编辑按钮，将限流阈值修改为 888 。点击发布，发布成功后，查看控制台日志，你会发现认证服务已经实时感知到了配置的变化，并将具体的配置信息以日志的方式，打印了出来。
+
+热更新成功。
 
 # 微服务保护 Sentinel
 

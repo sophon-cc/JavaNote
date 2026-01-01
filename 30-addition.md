@@ -242,7 +242,7 @@ public class JacksonConfig {
     <!-- 引用 Spring Boot 的 logback 基础配置 -->
     <include resource="org/springframework/boot/logging/logback/defaults.xml" />
 
-    <!-- 应用名称 -->
+    <!-- 应用名称 需要修改部分为 value="" -->
     <property scope="context" name="appName" value="auth"/>
     <!-- 自定义日志输出路径，以及日志名称前缀 -->
     <property name="LOG_FILE" value="./logs/${appName}.%d{yyyy-MM-dd}"/>
@@ -1243,189 +1243,117 @@ public class MyInitializingBean implements InitializingBean {
 - SmartInitializingSingleton：适合需要在所有单例 bean 初始化完成后执行的初始化逻辑。
 - InitializingBean：适合需要在 bean 属性设置完成后执行的初始化逻辑。
 
-## 15. Nacos 配置热更新：注解
 
-**创建配置**
+## 15. TransmittableThreadLocal：异步获取上下文
 
-进入 Nacos 管理后台，创建配置。浏览器访问： http://localhost:8848/nacos ， 进入到 Nacos 控制台，如下图所示，点击创建配置按钮：
+ThreadLocal 存在的问题我们写业务代码的时候，有些逻辑是需要在异步线程中去执行，如下图所示，异步线程中，再通过 ThreadLocal 去获取上下文数据，就失效了。
 
-![](./pictures/addition/add017.png)
+![](./pictures/addition/add021.png)
 
-![](./pictures/addition/add018.png)
+InheritableThreadLocal 好使不？
 
-### 15.1 单体项目
+InheritableThreadLocal 是 Java 提供的另一个特殊的类，它是 ThreadLocal 的子类。与 ThreadLocal 不同，InheritableThreadLocal 允许线程将其父线程中的值传递给其子线程。这对于一些需要在父子线程之间共享数据的场景非常有用。但是 InheritableThreadLocal 同样有它的弊端，如果我们在使用线程池的情况下，它就不好使了。
 
-**添加依赖**
+TransmittableThreadLocal 是阿里巴巴开源的一个库，专门为了解决在使用线程池或异步执行框架时，InheritableThreadLocal 不能传递父子线程上下文的问题。TransmittableThreadLocal 能够将父线程中的上下文在子线程或线程池中执行时也能够保持一致。
 
-然后，添加 Nacos 配置需要使用的依赖：
+引入依赖：
 
 ```xml
-<!-- Nacos 配置中心 -->
 <dependency>
-    <groupId>com.alibaba.boot</groupId>
-    <artifactId>nacos-config-spring-boot-starter</artifactId>
+    <groupId>com.alibaba</groupId>
+    <artifactId>transmittable-thread-local</artifactId>
 </dependency>
 ```
 
-**项目配置 Nacos**
-
-依赖添加完毕后，编辑 applicaiton.yml 文件，准备添加 Nacos 相关配置：
-
-![](./pictures/addition/add019.png)
-
-配置项如下：
-
-```yaml
-rate-limit:
-  api:
-    limit: 100 # 接口限流阈值
-
-nacos: 
-  config: # Nacos 配置中心
-    access-key: # 身份验证
-    secret-key: # 身份验证
-    data-id: xiaohashu-auth # 指定要加载的配置数据的 Data Id
-    group: DEFAULT_GROUP # 指定配置数据所属的组
-    type: yaml # 指定配置数据的格式
-    server-addr: http://127.0.0.1:8848/ # 指定 Nacos 配置中心的服务器地址
-    auto-refresh: true # 是否自动刷新配置
-    remote-first: true # 是否优先使用远程配置
-    bootstrap:
-      enable: true # 启动时，预热配置
-```
-
-**使用 @NacosValue 注解**
-
-编辑 TestController 控制器，将之前的 Spring 框架提供的 @Value 注解，替换为 Nacos 的 @NacosValue 注解，代码如下：
+快速入门：
 
 ```java
-@RestController
-@Slf4j
-public class TestController {
-    // @Value("${rate-limit.api.limit}")
-    @NacosValue(value = "${rate-limit.api.limit}", autoRefreshed = true)
-    private Integer limit;
+public class LoginUserContextHolder {
+    // 初始化一个 TransmittableThreadLocal 变量
+    private static final ThreadLocal<Map<String, Object>> LOGIN_USER_CONTEXT_THREAD_LOCAL
+            = TransmittableThreadLocal.withInitial(HashMap::new);
 
-    @GetMapping("/test")
-    public String test() {
-        return "当前限流阈值为: " + limit;
+    /**
+     * 设置用户 ID
+     *
+     * @param value
+     */
+    public static void setUserId(Object value) {
+        LOGIN_USER_CONTEXT_THREAD_LOCAL.get().put(GlobalConstants.USER_ID, value);
     }
-}
-```
 
-**重启项目**
-
-代码编写完毕后，记得重启项目，开始测试 Nacos 配置是否好使。进入到 Nacos 管理后台中，点击编辑按钮，将限流阈值修改为 888 。点击发布，发布成功后，查看控制台日志，你会发现认证服务已经实时感知到了配置的变化，并将具体的配置信息以日志的方式，打印了出来。
-
-热更新成功。
-
-### 15.2 微服务项目
-
-**添加依赖**
-
-nacos-config-spring-boot-starter 依赖，来整合的 Nacos，此方式适合单体项目。在微服务项目中，推荐使用 spring-cloud-starter-alibaba-nacos-config依赖，编辑认证服务的 pom.xml 文件，添加依赖如下：
-
-```xml
-<dependency>
-    <groupId>com.alibaba.cloud</groupId>
-    <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
-</dependency>
-
-<dependency>
-    <groupId>org.springframework.cloud</groupId>
-    <artifactId>spring-cloud-starter-bootstrap</artifactId>
-</dependency>
-```
-
-**添加 Nacos 配置项**
-
-创建 bootstrap.yml 文件：
-
-```yaml
-spring:
-  application:
-    name: xiaohashu-auth # 应用名称
-  profiles:
-    active: dev # 默认激活 dev 本地开发环境
-  cloud:
-    nacos:
-      config:
-        server-addr: http://127.0.0.1:8848 # 指定 Nacos 配置中心的服务器地址
-        prefix: ${spring.application.name} # 配置 Data Id 前缀，这里使用应用名称作为前缀
-        group: DEFAULT_GROUP # 所属组
-        namespace: public # 命名空间
-        file-extension: yaml # 配置文件格式
-        refresh-enabled: true # 是否开启动态刷新
-```
-
-prefix : 配置中心的配置 Data Id 前缀，这里使用应用名称作为前缀，实际监听 Nacos 中的配置时，还会带上环境 profile 的值，比如激活的是 dev 环境，则实际监听的是 Data Id 为 xiaohashu-auth-dev.yaml 的配置，小伙伴们在 Nacos 后台命名配置 Data Id 的时候，名称需要保持一致，否则会监听不到对应配置。
-
-**添加 @RefreshScope 注解**
-
-为了能够让 AlarmConfig 配置类实时监听到 Nacos 中的配置，并注入不同的 Bean 实现类。还需要在类、方法上配置 @RefreshScope 注解，代码如下：
-
-```java
-@Configuration
-@RefreshScope
-public class AlarmConfig {
-
-    @Value("${alarm.type}")
-    private String alarmType;
-
-    @Bean
-    @RefreshScope
-    public AlarmInterface mailAlarmHelper() {
-        // 根据配置文件中的告警类型，初始化选择不同的告警实现类
-        if (StringUtils.equals("sms", alarmType)) {
-            return new SmsAlarmHelper();
-        } else if (StringUtils.equals("mail", alarmType)) {
-            return new MailAlarmHelper();
-        } else {
-            throw new IllegalArgumentException("错误的告警类型...");
+    /**
+     * 获取用户 ID
+     *
+     * @return
+     */
+    public static  Long getUserId() {
+        Object value = LOGIN_USER_CONTEXT_THREAD_LOCAL.get().get(GlobalConstants.USER_ID);
+        if(Objects.isNull(value)){
+            return null;
         }
+        return Long.valueOf(value.toString());
+    }
+
+    /**
+     * 删除 ThreadLocal
+     */
+    public static void remove() {
+        LOGIN_USER_CONTEXT_THREAD_LOCAL.remove();
     }
 }
 ```
 
-@RefreshScope 注解是 Spring Cloud 提供的一个注解，用于实现配置动态刷新功能。当配置中心的配置发生变化时，标注了 @RefreshScope 的 Bean 会重新加载最新的配置，而无需重启应用。
+## 16. 密码加密: BCrypt
 
-在 Nacos 配置中心的场景下，@RefreshScope 的主要功能包括：
+在系统中，安全存储用户密码是至关重要的。使用明文存储密码容易受到攻击，相信小伙伴们都看过某些网站用户数据库被黑，密码都是明文保存的，密码大批泄露的新闻，因此使用密码加密技术来保护用户密码是必不可少的。
 
-- 动态刷新配置：当 Nacos 配置中心的配置发生变化时，应用中的配置会自动更新，避免了手动重启应用的繁琐过程。
-- 重新加载 Bean：标注了 @RefreshScope 的 Bean 会在配置变化后重新加载，确保 Bean 使用最新的配置。
-- 与 Spring Cloud 集成：@RefreshScope 与 Spring Cloud 的配置管理机制紧密集成，能够无缝地处理配置更新事件。
+**密码加密的重要性**
 
-**创建 Nacos 配置**
+安全性： 存储加密后的密码可以防止明文密码泄漏，即使数据库被攻击也不会暴露用户的真实密码。
+防御攻击： 使用密码哈希算法可以防止常见的攻击，如彩虹表攻击。
+隐私保护： 用户的密码是敏感信息，应当采取措施来保护用户的隐私。
 
-登录到 Nacos 管理后台中，点击创建配置按钮。配置相关配置项，如下图所示，配置完成后，点击发布按钮：
+**使用 BCryptPasswordEncoder**
 
-![](./pictures/addition/add020.png)
+BCryptPasswordEncoder 是 Spring Security 中用于对密码进行哈希处理的一种加密工具类。它基于 BCrypt 哈希函数，专门设计用于存储密码，提供了较高的安全性和抗攻击性。
 
-一切准备就绪后，在 TestController 接口中，新增一个 /alarm 测试接口，代码如下：
+它具有如下特性：
+
+- 自动加盐：每次调用 encode 方法时，BCryptPasswordEncoder 都会自动生成一个随机的盐值。
+- 内置安全性：BCrypt 算法是专门为存储密码设计的，具有较强的抗攻击性。
+
+**添加依赖**
+
+编辑认证服务的 pom.xml 文件，添加如下依赖：
+
+```xml
+<!-- 密码加密 -->
+<dependency>
+    <groupId>org.springframework.security</groupId>
+    <artifactId>spring-security-crypto</artifactId>
+</dependency>
+```
+
+**添加配置**
+
+```java
+@Component
+public class PasswordEncoderConfig {
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        // BCrypt 是一种安全且适合密码存储的哈希算法，它在进行哈希时会自动加入“盐”，增加密码的安全性。
+        return new BCryptPasswordEncoder();
+    }
+}
+```
+
+使用时只需要注入即可：
 
 ```java
 @Resource
-private AlarmInterface alarm;
-
-
-@GetMapping("/alarm")
-public String sendAlarm() {
-    alarm.send("系统出错啦，犬小哈这个月绩效没了，速度上线解决问题！");
-    return "alarm success";
-}
+private PasswordEncoder passwordEncoder;
 ```
-
-**重启项目**
-
-项目重启后，在 nacos 改变配置即可动态加载 bean 。
-
-
-
-
-
-
-
-
 
 
 
