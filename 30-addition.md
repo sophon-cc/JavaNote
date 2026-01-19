@@ -42,6 +42,24 @@
 
 ## 3.Druid 数据库连接池配置
 
+依赖：
+
+```xml
+<!-- MySQL 驱动 -->
+<dependency>
+    <groupId>mysql</groupId>
+    <artifactId>mysql-connector-java</artifactId>
+</dependency>
+
+<!-- Druid 数据库连接池 -->
+<dependency>
+    <groupId>com.alibaba</groupId>
+    <artifactId>druid-spring-boot-3-starter</artifactId>
+</dependency>
+```
+
+配置：
+
 ```yaml
 spring:
   datasource:
@@ -1355,50 +1373,439 @@ public class PasswordEncoderConfig {
 private PasswordEncoder passwordEncoder;
 ```
 
+## 17.短文本存储技术选型
+
+**分布式 KV 存储系统**：如基于 RocksDB 存储引擎上构建的 Cassandra 、TiKV 等，都有非常好的扩展性和数据持久化能力，并且数据保存在磁盘上，磁盘相较于内存要廉价很多，非常适合用于存储海量的短文本数据
+
+- 特点：
+
+    - 分布式存储：高可用性和可扩展性强。
+    - 支持时间序列数据：适合处理大规模时间序列数据。
+    - 可线性扩展：增加节点可以线性提高读写性能。
+
+- 适用场景：
+
+    - 大规模数据存储和分析。
+    - 需要高可用性的系统。
+    - 横向扩展需求强烈的场景。
 
 
+**分布式文档数据库**：数据以文档的形式存储，通常使用 JSON、BSON（Binary JSON）或 XML 格式。这使得数据结构非常灵活，适合存储半结构化或无结构的数据，典型的代表就是 MongDB ，具有强大的查询和索引功能。
 
+- 特点：
 
+    - 文档存储：以 JSON 格式存储数据，灵活性强。
+    - 索引支持：支持多种索引，查询性能好。
+    - 分片机制：支持水平分片，数据量大时扩展性强。
 
+- 适用场景：
 
+    - 半结构化数据存储，如日志、文档管理。
+    - 需要快速开发迭代的应用。
+    - 数据模式不固定或变化频繁的场景。
 
+针对海量的短文本存储，这里不考虑内存型 KV 数据库，一是内存非常昂贵，另外，数据持久化表现也比较一般。所以在 KV 存储系统或者分布式文档数据库中选择，若更关注于易用性，可以考虑分布式文档数据库。而针对小红书项目，我们更在意性能，所以最终选型 KV 存储系统 Apache Cassandra。
 
+它是一个强大、灵活且可扩展的分布式 NoSQL 数据库系统，适用于需要高可用性、高吞吐量和低延迟的应用场景。其无中心化架构、可调一致性、以及列族存储模型，使其成为处理大规模数据和实时分析的理想选择。
 
+### 17.1 什么是 Cassandra ?
 
+Apache Cassandra 是一个开源的分布式 NoSQL（Not Only SQL）数据库管理系统，专为处理大规模数据量和高写入频率的工作负载而设计。它最初由 Facebook 开发，后来贡献给了 Apache 软件基金会，成为了 Apache 的一个顶级项目。
 
+Cassandra 结合了 Google Bigtable 的数据模型和 Amazon Dynamo 的完全分布式架构，提供了以下关键特性：
 
+- 高可用性：Cassandra 是一个无单点故障的系统，它通过数据复制和一致性级别选择，确保即使在节点失败的情况下数据仍然可访问。
 
+- 水平可扩展性：Cassandra 能够通过添加更多节点到集群中轻松扩展，无需停机，这使得它能够处理不断增长的数据量和用户负载。
 
+- 分布式数据存储：数据在集群中的多个节点上分布存储，每个节点都是平等的，没有主从之分，这有助于提高性能和可靠性。
 
+- 最终一致性：Cassandra 允许开发者选择数据的一致性和可用性之间的权衡，通过可配置的一致性级别，可以在强一致性和高可用性之间找到合适的平衡点。
 
+- 数据模型：Cassandra 使用列族（column-family）的数据模型，允许以宽列的方式存储数据，非常适合存储半结构化或非结构化数据。
 
+- 数据压缩和索引：Cassandra 支持数据压缩和创建二级索引，以提高存储效率和查询性能。
 
+- 多数据中心复制：Cassandra 支持跨多个地理区域的数据中心复制，以实现数据的地理分布和灾难恢复。
 
+Cassandra 被广泛应用于需要处理大量数据和高写入负载的场景，例如社交网络、物联网（IoT）、实时数据分析和推荐系统等。由于其强大的可扩展性和高可用性，Cassandra 成为了许多大型企业如 Netflix、Digg、Twitter 等的选择。
 
+### 17.2部署 Cassandra
 
+docker 运行 Cassandra 镜像：
 
+```bash
+docker pull cassandra:latest
 
+docker run --name cassandra -d -p 9042:9042 -v /docker/cassandra/data:/var/lib/cassandra cassandra:latest
+```
 
+cassandra 容器运行成功后，执行如下命令，可进入到容器中：
 
+```bash
+docker exec -it cassandra /bin/sh
+cqlsh
+```
 
+> cqlsh 是 Cassandra Query Language Shell 的缩写，它是一个命令行工具，允许你向 Cassandra 数据库发送查询、创建表、插入数据、检索数据等。
 
+### 17.3 CQL 基本命令
 
+Cassandra Query Language (CQL) 是 Apache Cassandra 数据库的一种专用查询语言，它简化了与 Cassandra 的交互，提供了一种类似 SQL 的语法来管理数据。本小节中，我们就来学习一下如何使用 CQL 命令来创建、管理和查询 Cassandra 数据库。
 
+Cassandra 中几个基本概念：
 
+- 节点（Node）：Cassandra 集群中的每个服务器称为一个节点。每个节点都存储数据，并且相互之间没有主从关系，所有节点都是对等的。
+- 集群（Cluster）：由多个节点组成的分布式系统称为集群。集群中的节点共同工作，处理读写请求并存储数据。
+- 数据中心（Data Center）：集群中的节点可以分布在多个数据中心，每个数据中心包含若干个节点。数据中心的划分有助于实现跨地域的高可用性。
+- 键空间（Keyspace）：键空间是一个逻辑容器，用于管理多个表，可以理解为 MySQL 中的库。另外，键空间定义了数据复制的策略。
+- 表（Table）：表是数据存储的基本单位，由行和列组成。每张表都有一个唯一的名称和定义。
+- 主键（Primary Key）：每行数据都有一个唯一的主键。主键由分区键和可选的列组成，用于唯一标识数据行。
+- 分区键（Partition Key）：Cassandra 使用分区键的哈希值将数据分布到不同的节点上，从而实现负载均衡和数据的水平扩展。分区键可以是单个列或多列的组合（复合分区键）。
 
+#### 键空间（Keyspace）
 
+**1.创建**
 
+打开 cqlsh 命令行，执行下面语句，来创建一个 Keyspace:
 
+```bash
+CREATE KEYSPACE IF NOT EXISTS xiaohashu WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};
+```
 
+> WITH replication: 这里指定了 keyspace 的复制策略和配置。复制策略决定了数据如何在集群中复制和分布。
+> 'class': 'SimpleStrategy': 这里指定了复制策略的类型为 SimpleStrategy。SimpleStrategy 是一种基本的复制策略，适用于单数据中心的部署。它将数据均匀地分布到集群中的节点上。
+> 'replication_factor': 1: 这是复制因子，表示每个数据分区的副本数量。在这个例子中，replication_factor 设置为 1，意味着每个数据分区只有一个副本，这通常用于测试或开发环境，但在生产环境中可能不是最佳实践，因为缺乏冗余会导致数据丢失的风险增加。
 
+**2.查看**
 
+键空间创建完成后，执行如下命令，可查看所有的 Keyspace :
 
+```bash
+DESCRIBE KEYSPACES;
+```
 
+**3.删除**
 
+如果想删除某个键空间，以及其中的所有数据，可执行如下语句：
 
+```bash
+DROP KEYSPACE IF EXISTS xiaohashu;
+```
 
+**4.选择**
 
+键空间创建完成后，可通过 USE 命令，选择该 Keyspace ，以便后续操作它:
 
+```bash
+use xiaohashu;
+```
+
+#### 表
+
+**1.创建表**
+
+执行如下语句，创建一张 note_content 笔记内容表。这里注意，由于我们是拿 Cassandra 充当 K-V 键值存储数据库，所以表中只包含两个字段（实际可以支持多字段），id 主键充当 Key , 笔记内容 content 充当 Value :
+
+```bash
+CREATE TABLE note_content (
+    id UUID PRIMARY KEY,
+    content TEXT
+);
+```
+
+为什么这里要用 UUID? 而不是笔记本身的 ID?
+UUID 生成的值具有较高的随机性，因此在集群中可以提供良好的数据分布，避免热点问题。
+
+> id UUID PRIMARY KEY: 这里定义了表中的一个列 id，其数据类型是 UUID（通用唯一标识符）。PRIMARY KEY 指示 id 列是表的主键。在 Cassandra 中，主键用于唯一标识表中的每一行，同时也是数据在集群中分区的依据。
+> 
+> content TEXT: 这里定义了另一个列 content，其数据类型是 TEXT。TEXT 类型用于存储文本字符串。
+
+**2.插入数据**
+
+笔记内容表创建完成后，执行如下语句，插入一条数据：
+
+```bash
+INSERT INTO note_content (id, content) VALUES (uuid(), '这是一条测试笔记');
+```
+
+**3.查询记录**
+
+```bash
+SELECT * FROM note_content;
+SELECT * FROM note_content WHERE id = 728c9c82-c64b-410b-8970-0dcae49efaa7;
+```
+
+**4.更新记录**
+
+以 id 为条件来更新对应笔记内容：
+
+```bash
+UPDATE note_content SET content = '更新后的评论内容' WHERE id = 728c9c82-c64b-410b-8970-0dcae49efaa7;
+```
+
+**5.删除记录**
+
+```bash
+DELETE FROM note_content WHERE id = 728c9c82-c64b-410b-8970-0dcae49efaa7;
+```
+
+### 17.4 Spring Boot 3.x 整合 Cassandra
+
+**添加依赖**
+
+编辑 xiaohashu-kv-biz 模块中的 pom.xml 文件，添加如下依赖：
+
+```xml
+<!-- Cassandra 存储 -->
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-cassandra</artifactId>
+</dependency>
+```
+
+**添加配置**
+
+接着，编辑 application-dev.yml 开发环境配置文件，添加连接 Cassandra 所需的相关配置，如键空间、连接地址、端口，大致如下：
+
+```yaml
+spring:
+  cassandra:
+    keyspace-name: xiaohashu
+    contact-points: 127.0.0.1
+    port: 9042
+```
+
+**新建 DO 实体类与 Repository 接口**
+
+note_content 表对应的数据库实体类，代码如下：
+
+```java
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import org.springframework.data.cassandra.core.mapping.PrimaryKey;
+import org.springframework.data.cassandra.core.mapping.Table;
+
+import java.util.UUID;
+
+@Table("note_content")
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class NoteContentDO {
+
+    @PrimaryKey("id")
+    private UUID id;
+
+    private String content;
+}
+```
+
+创建 NoteContentRepository 接口，代码如下：
+
+```java
+import com.quanxiaoha.xiaohashu.kv.biz.domain.dataobject.NoteContentDO;
+import org.springframework.data.cassandra.repository.CassandraRepository;
+
+import java.util.UUID;
+
+public interface NoteContentRepository extends CassandraRepository<NoteContentDO, UUID> {
+
+}
+```
+
+CassandraRepository: 这是 Spring Data Cassandra 提供的一个泛型接口，它为 Cassandra 数据库提供了 CRUD（创建、读取、更新、删除）和其他一些基本的操作方法。
+
+<NoteContentDO, UUID>: 这里有两个类型参数：
+NoteContentDO: 表示与 Cassandra 数据库交互时使用的数据对象类型。通常情况下，这是一个 Java 类，它映射到数据库中的表。
+UUID: 表示 NoteContentDO 对象的主键类型。根据表的实际情况来定义，这里使用 UUID 作为主键类型。
+
+**声明配置类**
+
+创建 CassandraConfig 数据源配置类，代码如下：
+
+```java
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.data.cassandra.config.AbstractCassandraConfiguration;
+
+@Configuration
+public class CassandraConfig extends AbstractCassandraConfiguration {
+
+    @Value("${spring.cassandra.keyspace-name}")
+    private String keySpace;
+
+    @Value("${spring.cassandra.contact-points}")
+    private String contactPoints;
+
+    @Value("${spring.cassandra.port}")
+    private int port;
+
+    /*
+     * Provide a keyspace name to the configuration.
+     */
+    @Override
+    public String getKeyspaceName() {
+        return keySpace;
+    }
+
+    @Override
+    public String getContactPoints() {
+        return contactPoints;
+    }
+
+    @Override
+    public int getPort() {
+        return port;
+    }
+}
+```
+
+**测试**
+
+```java
+@SpringBootTest
+@Slf4j
+public class CassandraTests {
+    @Resource
+    private NoteContentRepository noteContentRepository;
+
+    /**
+     * 测试插入数据
+     */
+    @Test
+    void testInsert() {
+        NoteContentDO nodeContent = NoteContentDO.builder()
+                .id(UUID.randomUUID())
+                .content("代码测试笔记内容插入")
+                .build();
+
+        noteContentRepository.save(nodeContent);
+    }
+
+    /**
+     * 测试修改数据
+     */
+    @Test
+    void testUpdate() {
+        NoteContentDO nodeContent = NoteContentDO.builder()
+                .id(UUID.fromString("1d9b3971-d0e8-4374-a3cb-a52c9a34c27a"))
+                .content("代码测试笔记内容更新")
+                .build();
+
+        noteContentRepository.save(nodeContent);
+    }
+
+    /**
+     * 测试查询数据
+     */
+    @Test
+    void testSelect() {
+        Optional<NoteContentDO> optional = noteContentRepository.findById(UUID.fromString("1d9b3971-d0e8-4374-a3cb-a52c9a34c27a"));
+        optional.ifPresent(noteContentDO -> log.info("查询结果：{}", JsonUtils.toJsonString(noteContentDO)));
+    }
+
+    /**
+     * 测试删除数据
+     */
+    @Test
+    void testDelete() {
+        noteContentRepository.deleteById(UUID.fromString("1d9b3971-d0e8-4374-a3cb-a52c9a34c27a"));
+    }
+}
+```
+
+## 18. Zookeeper
+
+### 18.1 Zookeeper 介绍
+
+Apache ZooKeeper 是一个开源的分布式协调服务，用于大型分布式系统的开发和管理。它提供了一种简单而统一的方法来解决分布式应用中常见的协调问题，如命名服务、配置管理、集群管理、组服务、分布式锁、队列管理等。ZooKeeper 通过提供一种类似文件系统的结构来存储数据，并允许客户端通过简单的 API 进行读写操作，从而简化了分布式系统的复杂度。
+
+**Zookeeper 的核心特性如下**：
+
+一致性：对于任何更新，所有客户端都将看到相同的数据视图。这是通过 ZooKeeper 的原子性保证的，意味着所有更新要么完全成功，要么完全失败。
+
+可靠性：一旦数据被提交，它将被持久化存储，即使在某些服务器出现故障的情况下，数据也不会丢失。
+
+实时性：ZooKeeper 支持事件通知机制，允许客户端实时接收到数据变化的通知。
+
+高可用性：ZooKeeper 通常以集群形式部署，可以容忍部分节点的故障，只要集群中超过半数的节点是可用的，ZooKeeper 就能继续提供服务。
+
+**ZooKeeper 的数据模型**：
+
+ZooKeeper 使用一个层次化的命名空间来组织数据，类似于文件系统中的目录树。每个节点（称为znode）都可以有子节点，形成树状结构。每个 znode 可以存储一定量的数据，并且可以设置访问控制列表（ACL）来控制谁可以读取或修改数据。
+
+**ZooKeeper 的应用场景**：
+
+配置管理：ZooKeeper 可以用来集中存储和管理分布式系统中的配置信息，当配置发生变化时，可以实时通知到所有客户端。
+
+命名服务：ZooKeeper 可以作为服务发现的注册中心，帮助客户端查找和定位服务。
+
+集群管理：ZooKeeper 可以用于选举主节点、检测集群成员的变化、以及监控集群的健康状况。
+
+分布式锁：ZooKeeper 提供了一种机制来实现分布式环境下的互斥访问，保证多个进程之间数据操作的正确性。
+
+队列管理：ZooKeeper 可以用来实现分布式队列，如任务调度队列或消息队列。
+
+### 18.2 环境搭建
+
+拉取 Zookeeper 镜像，启动容器：
+
+```bash
+docker pull zookeeper:3.5.6
+
+docker run -d --name zookeeper -p 2181:2181 -e TZ="Asia/Shanghai" -v /docker/zookeeper/data:/data -v /docker/zookeeper/conf:/conf zookeeper:3.5.6
+```
+
+执行如下命令，进入到 Zookeeper 容器中：
+
+```bash
+docker exec -it zookeeper bash
+```
+
+接着，执行如下命令，来启动 ZooKeeper 的命令行界面（CLI），它允许用户直接与 ZooKeeper 服务器进行交互：
+
+```bash
+./bin/zkCli.sh
+```
+
+### 18.3 zk 基本命令
+
+ZooKeeper CLI (zkCli) 是 ZooKeeper 分布式协调服务附带的一个命令行工具，它提供了与 ZooKeeper 服务器交互的方式。使用 zkCli，你可以执行诸如查看、创建、修改和删除 ZooKeeper 中的数据节点（znodes）的操作。
+
+ls：列出当前路径下的子节点。如：查看根节点的子节点，命令如下：
+```bash
+ls /
+```
+
+create：创建一个新的节点 （znode）。命令如下：
+```bash
+create /myNode "犬小哈专栏"
+```
+以上命令，将创建一个名为 /myNode 的节点，并初始化其数据为 "犬小哈专栏"。
+
+get：获取指定节点的数据和状态信息。命令如下：
+```bash
+get /myNode
+```
+
+set：设置指定节点的数据。命令如下：
+```bash
+set /myNode "犬小哈专栏更新啦"
+```
+
+delete：删除指定的节点（znode） 。命令如下：
+```bash
+delete /myNode
+```
+
+quit：退出 zkCli 命令行工具。
+```bash
+quit
+```
 
 
 

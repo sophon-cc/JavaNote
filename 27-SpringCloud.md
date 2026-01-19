@@ -545,6 +545,64 @@ public interface ItemClient {
 
 feign替我们完成了服务拉取、负载均衡、发送http请求的所有工作，是不是看起来优雅多了。
 
+## Feign Form
+
+feign-form 是一个 Feign 扩展库，专门用于处理表单数据的编码。它提供了一些增强功能，使 Feign 客户端能够更方便地处理表单提交和文件上传等操作。
+
+**1.引入扩展依赖**
+
+```xml
+ <!-- Feign 表单提交 -->
+<dependency>
+    <groupId>io.github.openfeign.form</groupId>
+    <artifactId>feign-form-spring</artifactId>
+</dependency>
+<dependency>
+    <groupId>io.github.openfeign.form</groupId>
+    <artifactId>feign-form</artifactId>
+</dependency>
+```
+
+**2.编写配置类**
+
+SpringFormEncoder 是 Feign 提供的一个编码器，用于处理表单提交。它将对象编码为表单数据格式（如 application/x-www-form-urlencoded 或 multipart/form-data），以便在 HTTP 请求中使用。
+创建 /config 包，并新建一个 FeignFormConfig 表单配置类，代码如下：
+
+```java
+import feign.codec.Encoder;
+import feign.form.spring.SpringFormEncoder;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class FeignFormConfig {
+    @Bean
+    public Encoder feignFormEncoder() {
+        return new SpringFormEncoder();
+    }
+}
+```
+
+**3.配置**
+
+接下来，要让 feign form 生效，还需要配置这个类。局部生效即可：
+
+```java
+@FeignClient(name = ApiConstants.SERVICE_NAME, configuration = FeignFormConfig.class)
+public interface FileFeignApi {
+
+    String PREFIX = "/file";
+
+    /**
+     * 文件上传
+     *
+     * @param file
+     * @return
+     */
+    @PostMapping(value = PREFIX + "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    Response<?> uploadFile(@RequestPart(value = "file") MultipartFile file);
+}
+```
 
 ## 连接池
 
@@ -1196,6 +1254,34 @@ public RequestInterceptor userInfoRequestInterceptor(){
 ```
 
 现在微服务之间通过OpenFeign调用时也会传递登录用户信息了。
+
+> 2026/01/12 补充：
+> 
+> 该操作一般放在自定义的 starter 中所有微服务共享。应包含依赖：
+> 
+> ```xml
+> <dependency>
+>     <groupId>io.github.openfeign</groupId>
+>     <artifactId>feign-core</artifactId>
+> </dependency>
+> ```
+> 
+> ```java
+> @Slf4j
+> public class FeignRequestInterceptor implements RequestInterceptor {
+>     @Override
+>     public void apply(RequestTemplate requestTemplate) {
+>         // 获取当前上下文中的用户 ID
+>         Long userId = LoginUserContextHolder.getUserId();
+> 
+>         // 若不为空，则添加到请求头中
+>         if (Objects.nonNull(userId)) {
+>             requestTemplate.header(GlobalConstants.USER_ID, String.valueOf(userId));
+>             log.info("########## feign 请求设置请求头 userId: {}", userId);
+>         }
+>     }
+> }
+> ```
 
 ## 网关自定义全局异常
 

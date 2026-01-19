@@ -1175,9 +1175,10 @@ mybatis-generator-maven-plugin 是一个 Maven 插件，用于生成 MyBatis 的
 </build>
 ```
 
-## 2、创建逆向工程的配置文件
+## 2、创建代码生成的配置文件
 
-> 文件名必须是：generatorConfig.xml
+> 文件名必须是：generatorConfig.xml，文件路径在 resources 包下。
+
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE generatorConfiguration
